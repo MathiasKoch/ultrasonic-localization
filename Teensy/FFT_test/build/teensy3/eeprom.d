@@ -1,2 +1,2 @@
-/home/mathias/Teensy/FFT_test/build/teensy3/eeprom.o: teensy3/eeprom.c \
- teensy3/mk20dx128.h
+/home/mathias/ultrasonic-localization/Teensy/FFT_test/build/teensy3/eeprom.o: \
+ teensy3/eeprom.c teensy3/mk20dx128.h

@@ -1,4 +1,4 @@
-/home/mathias/Teensy/FFT_test/build/teensy3/AudioStream.o: \
+/home/mathias/ultrasonic-localization/Teensy/FFT_test/build/teensy3/AudioStream.o: \
  teensy3/AudioStream.cpp teensy3/AudioStream.h teensy3/Arduino.h \
  teensy3/WProgram.h teensy3/avr/pgmspace.h teensy3/avr/interrupt.h \
  teensy3/avr_functions.h teensy3/wiring.h teensy3/binary.h \

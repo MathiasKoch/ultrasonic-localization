@@ -1,7 +1,7 @@
-/home/mathias/Teensy/FFT_test/build/teensy3/Stream.o: teensy3/Stream.cpp \
- teensy3/Arduino.h teensy3/WProgram.h teensy3/avr/pgmspace.h \
- teensy3/avr/interrupt.h teensy3/avr_functions.h teensy3/wiring.h \
- teensy3/binary.h teensy3/core_id.h teensy3/core_pins.h \
+/home/mathias/ultrasonic-localization/Teensy/FFT_test/build/teensy3/Stream.o: \
+ teensy3/Stream.cpp teensy3/Arduino.h teensy3/WProgram.h \
+ teensy3/avr/pgmspace.h teensy3/avr/interrupt.h teensy3/avr_functions.h \
+ teensy3/wiring.h teensy3/binary.h teensy3/core_id.h teensy3/core_pins.h \
  teensy3/mk20dx128.h teensy3/pins_arduino.h teensy3/HardwareSerial.h \
  teensy3/Stream.h teensy3/Print.h teensy3/WString.h teensy3/Printable.h \
  teensy3/new.h teensy3/avr_emulation.h teensy3/usb_serial.h \
