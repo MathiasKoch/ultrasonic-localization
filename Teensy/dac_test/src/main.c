@@ -7,7 +7,7 @@ int main(void)
     pinMode(A14, OUTPUT);
     analogWriteResolution(12);
     while (1) {
-        float val = 0.47;
+        float val = 0.46;
 		analogWrite(A14, (int)(val*2048.0));
 		//phase = phase + 0.02;
 		//if (phase >= twopi) phase = 0;

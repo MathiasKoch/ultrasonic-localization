@@ -1,13 +1,16 @@
 
-#include <avr/io.h>
-#include <common.h>
+#include "mk20dx128.h"
+#define ARM_MATH_CM4
+#include <arm_math.h>
+//#include <common.h>
 
 #define PDB_CH0C1_TOS 0x0100
 #define PDB_CH0C1_EN 0x01
+#define PDB_SC_PDBIF_MASK 0x40u
 
-
-uint16_t samples[256];
-uint16_t samples2[256];
+q15_t samples[256];
+q15_t samples2[256];
+uint32_t elapsedTime;
 int bufferFlag;
 
 
@@ -58,7 +61,7 @@ void adcInit() {
     adcCalibrate();
 
 
-    ADC0_SC1A = ADC_SC1_AIEN |channel2sc1a[3];
+    ADC0_SC1A = ADC_SC1_AIEN | channel2sc1a[3];
 }
 
 /*
@@ -119,11 +122,11 @@ void dmaInit() {
     // Enable interrupt (end-of-major loop)
     DMA_TCD0_CSR = DMA_TCD_CSR_INTMAJOR;
 
-    // Set ADC as source (CH 1), enable DMA MUX
+    // Set ADC as source (CH 0), enable DMA MUX
     DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
     DMAMUX0_CHCFG0 = DMAMUX_SOURCE_ADC0 | DMAMUX_ENABLE;
 
-    // Enable request input signal for channel 1
+    // Enable request input signal for channel 0
     DMA_SERQ = 0;
 
 
@@ -140,13 +143,24 @@ void pgaInit(void){
     ADC0_PGA |= ADC0_PGA_PGALPB | ADC0_PGA_PGAEN;
 }
 
-void cmpInit(void){
-    // Enable compare function, set greater than and enable range function
-    ADC0_SC2 |= ADC_SC2_ACFE | ADC_SC2_ACFGT | ADC_SC2_ACREN;
+void enableCmp(uint8_t enable){
+    if(enable == 0x0)
+        ADC0_SC2 &= ~ADC_SC2_ACFE;
+    else
+        ADC0_SC2 |= ADC_SC2_ACFE;
+    
 }
 
+void cmpInit(void){
+    // Enable compare function, set greater than and enable range function
+    ADC0_SC2 |= ADC_SC2_ACFGT | ADC_SC2_ACREN;
+    enableCmp(0x1);
+}
+
+
 void setCmp(uint16_t cmp){
-    
+    ADC0_CV1 = 2048 + cmp;
+    ADC0_CV2 = 2048 - cmp;
 }
 
 
@@ -154,10 +168,17 @@ void setCmp(uint16_t cmp){
 void setGain(uint8_t gain){
     /* PGA gain = 2^(uint8_t gain) */
     if(gain <= 6)
-        ADC0_PGA |= ADC_PGA_PGAG(gain);
+        ADC0_PGA |= ADC0_PGA_PGAG(gain);
 }
 
-void dma_ch0_isr() {
+void pdb_isr(void){
+    elapsedTime += 1;
+    PDB0_SC &= ~PDB_SC_PDBIF_MASK;  // clear interrupt mask
+    //cycle_flags = 0;
+    return;
+}
+
+void dma_ch0_isr(void) {
     // Clear interrupt request for channel 1
     if(bufferFlag == 0){
         DMA_TCD0_DADDR = samples2;
@@ -169,12 +190,10 @@ void dma_ch0_isr() {
         bufferFlag = 0;
     }
     DMA_CINT = 0;
+    return;
 }
 
 int main(void){
-    pinMode(13, OUTPUT);
-    pinMode(15, OUTPUT);
-
     // Set busclock = system_clock/2 = 36 MHz
     SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(1);
 
