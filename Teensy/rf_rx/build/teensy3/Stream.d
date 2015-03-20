@@ -1,4 +1,4 @@
-/home/mathias/ultrasonic-localization/Teensy/timing_test/build/teensy3/Stream.o: \
+/home/mathias/ultrasonic-localization/Teensy/rf_rx/build/teensy3/Stream.o: \
  teensy3/Stream.cpp teensy3/Arduino.h teensy3/WProgram.h \
  teensy3/avr/pgmspace.h teensy3/avr/interrupt.h teensy3/avr_functions.h \
  teensy3/wiring.h teensy3/binary.h teensy3/core_id.h teensy3/core_pins.h \

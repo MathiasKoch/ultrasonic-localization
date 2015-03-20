@@ -1,2 +1,2 @@
-/home/mathias/ultrasonic-localization/Teensy/timing_test/build/teensy3/IPAddress.o: \
+/home/mathias/ultrasonic-localization/Teensy/rf_rx/build/teensy3/IPAddress.o: \
  teensy3/IPAddress.cpp

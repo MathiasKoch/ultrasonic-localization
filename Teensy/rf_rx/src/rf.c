@@ -36,13 +36,12 @@ int main()
 
     while(1)
     {    
+        
         if(nrf24_dataReady())
         {
-            nrf24_getData(data_array);        
+            nrf24_getData(data_array);      
+            
             xprintf("> ");
-            xprintf("%2X ",data_array[0]);
-            xprintf("%2X ",data_array[1]);
-            xprintf("%2X ",data_array[2]);
             xprintf("%2X\r\n",data_array[3]);
         }
     }

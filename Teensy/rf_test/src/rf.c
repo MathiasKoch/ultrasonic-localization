@@ -41,13 +41,10 @@ int main(void){
         data_array[2] = 0x55;
         data_array[3] = q++;                                    
 
-        /* Automatically goes to TX mode */
         nrf24_send(data_array);        
         
-        /* Wait for transmission to end */
         while(nrf24_isSending());
 
-        /* Make analysis on last tranmission attempt */
         temp = nrf24_lastMessageStatus();
 
         if(temp == NRF24_TRANSMISSON_OK)
@@ -63,15 +60,12 @@ int main(void){
         {                    
             xprintf("> Message is lost ...\r\n");  
             uint8_t status = nrf24_getStatus();
-            xprintf("> Status: %2X, ", status);
-            xprintf("TX_DS: %d, ", (status & (1 << TX_DS))); 
-            xprintf("MAX_RT: %X, ", (int)(status & (1 << MAX_RT)));  
             xprintf("\r\n");
         }
         
         /* Retranmission count indicates the tranmission quality */
-        temp = nrf24_retransmissionCount();
-        xprintf("> Retransmission count: %d\r\n\r\n",temp);
+        //temp = nrf24_retransmissionCount();
+        //xprintf("> Retransmission count: %d\r\n\r\n",temp);
 
         /* Optionally, go back to RX mode ... */
         /*nrf24_powerUpRx();
