@@ -36,12 +36,12 @@ IntervalTimer::ISR IntervalTimer::PIT_ISR[];
 // so that they can auto-clear themselves and so the user can
 // specify a custom ISR and reassign it as needed
 // ------------------------------------------------------------
-void pit0_isr() { PIT_TFLG0 = 1; IntervalTimer::PIT_ISR[0](); }
+/*void pit0_isr() { PIT_TFLG0 = 1; IntervalTimer::PIT_ISR[0](); }
 void pit1_isr() { PIT_TFLG1 = 1; IntervalTimer::PIT_ISR[1](); }
 void pit2_isr() { PIT_TFLG2 = 1; IntervalTimer::PIT_ISR[2](); }
 void pit3_isr() { PIT_TFLG3 = 1; IntervalTimer::PIT_ISR[3](); }
 
-
+*/
 
 // ------------------------------------------------------------
 // this function inits and starts the timer, using the specified
