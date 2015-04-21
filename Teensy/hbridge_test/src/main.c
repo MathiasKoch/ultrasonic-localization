@@ -11,9 +11,8 @@
 #define PDB_CH0C1_TOS 0x0100
 #define PDB_CH0C1_EN 0x01
 
-#define HBRO_1 7
-#define HBRO_2 8
-#define HBRO_E 20
+#define PWM 6
+#define HBRO_E 8
 #define MUX_1 17
 #define MUX_2 16
 #define MUX_TRANSMIT 1
@@ -52,8 +51,7 @@ void pdbInit() {
 
 
 void pdb_isr(void){
-    digitalWrite(HBRO_1, !digitalRead(HBRO_1));
-    digitalWrite(HBRO_2, !digitalRead(HBRO_2));
+    digitalWrite(PWM, !digitalRead(PWM));
     PDB0_SC &= ~0x40u;  // clear interrupt mask
     return;
 }
@@ -68,8 +66,7 @@ SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(1);
 
     xdev_out(usb_serial_putchar);
     pinMode(HBRO_E, OUTPUT);
-    pinMode(HBRO_1, OUTPUT);
-    pinMode(HBRO_2, OUTPUT);
+    pinMode(PWM, OUTPUT);
     pinMode(MUX_2, OUTPUT);
     pinMode(MUX_1, OUTPUT);
 
@@ -78,8 +75,7 @@ SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(1);
 
     analogWriteResolution(10);
    // analogWriteFrequency(HBRO_E, 25000);
-    digitalWrite(HBRO_1, HIGH);
-    digitalWrite(HBRO_2, LOW);
+    digitalWrite(PWM, HIGH);
 
     xprintf("\r\n> Device setup to transmit\r\n");
     digitalWrite(HBRO_E, HIGH);
