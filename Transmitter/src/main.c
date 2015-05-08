@@ -10,10 +10,8 @@
 
 #define PDB_CH0C1_TOS 0x0100
 #define PDB_CH0C1_EN 0x01
-
 #define TIE 0x2
 #define TEN 0x1
-
 #define uint16_MAX 65535
 
 // pin defines
@@ -29,11 +27,14 @@
 #define MODE_SAMPLE_180 4
 #define MODE_SAMPLE_270 5
 
+#define PERIOD_SHIFT 15
+#define PERIOD_TOTAL 30
 
 uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 volatile uint16_t clk;
 uint8_t calibrated = 0;
+volatile uint8_t period_cnt;
 
 void pit0_isr(){
     PIT_TFLG0 = 1;
@@ -80,11 +81,14 @@ void set_mode(int mode){
 
 void pit1_isr(){
     PIT_TFLG1 = 1;
-    digitalWrite(PWM, !digitalRead(PWM));
+    if(period_cnt != PERIOD_SHIFT*2 && period_cnt <= PERIOD_TOTAL*2)   
+        digitalWrite(PWM, !digitalRead(PWM));
+    if(period_cnt < (PERIOD_TOTAL*2) + 5)
+        period_cnt++;
     return;
 }
 
-#define PWM_PERIOD ((F_BUS / 40000)-1)    // 1 Mhz = 1 us
+#define PWM_PERIOD ((F_BUS / 2 / 40000)-1)   
 
 void pwm_init(void){
     SIM_SCGC6 |= SIM_SCGC6_PIT;
@@ -98,13 +102,12 @@ void pwm_init(void){
 
 
 void calibrate(){
-    // Disable H-bridge
     set_mode(MODE_SAMPLE_0);
-
+    calibrated = 1;
 
 }
 
-uint8_t sync_timer(){
+void sync_timer(){
     uint8_t data_out[3];
     
     data_out[0] = 'c';
@@ -115,17 +118,26 @@ uint8_t sync_timer(){
     nrf24_send(data_out);
     while(nrf24_isSending());
     uint8_t temp = nrf24_lastMessageStatus();
-
+    uint8_t retransmit_cnt = nrf24_retransmissionCount();
     if(temp == NRF24_TRANSMISSON_OK){ 
-        return 1;
+        data_out[0] = 'r';
+        data_out[1] = retransmit_cnt;
+        nrf24_send(data_out);
+        while(nrf24_isSending());
+        temp = nrf24_lastMessageStatus();
+        if(temp == NRF24_TRANSMISSON_OK){ 
+            xprintf("Transmitter >> Transmission count sent, with %u retransmits\r\n", retransmit_cnt);
+        }else if(temp == NRF24_MESSAGE_LOST){
+            xprintf("Transmitter >> Retransmit count message lost\r\n");
+        }
     }else if(temp == NRF24_MESSAGE_LOST){
-        return 0;
+        xprintf("Transmitter >> Message lost\r\n");
     }
-    return 0;
+    nrf24_powerUpRx();
 }
 
-void transmit(uint8_t total_periods, uint8_t shift_period){
-
+void transmit(){
+    period_cnt = 0;
 }
 
 
@@ -134,6 +146,9 @@ int main(){
 
     /* Init the xprintf library */
     xdev_out(usb_serial_putchar);
+
+    pinMode(HBRO_E, OUTPUT);
+    pinMode(PWM, OUTPUT);
 
     /* Init timers and RF */
     pwm_init();
@@ -149,18 +164,21 @@ int main(){
     /* Init mode to transmit mode */
     set_mode(MODE_TRANSMIT);
 
+    digitalWrite(PWM, HIGH);
+
     xprintf("\r\n> Device setup to transmit\r\n");
+    digitalWrite(HBRO_E, HIGH);
 
     uint8_t data_in[3];
     while(1){    
-        nrf24_powerUpRx();
         _delay_us(400);
         if(nrf24_dataReady()){
             nrf24_getData(data_in);   
             switch(data_in[0]){
                 case 'c':
-                    if(sync_timer())
-                        transmit(40, 20);
+                    xprintf("Transmitter >> Received data\r\n");
+                    sync_timer();
+                    transmit();
                     break;
 
                 default:
