@@ -18,10 +18,12 @@
 #define uint16_MAX 65535
 
 //#define DEBUG_RF
-//#define DEBUG_FFT
+#define DEBUG_FFT
 //#define DEBUG_SAMPLE
 
-#define BUFSIZE 512
+#define BUFSIZE 2048
+#define NUMTAPS 16
+#define BLOCKSIZE 32
 
 uint8_t tx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 uint8_t rx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
@@ -32,10 +34,15 @@ static q15_t buffer1[BUFSIZE];
 static q15_t h[BUFSIZE/2];
 static q15_t samples[BUFSIZE/2];
 static q15_t samples2[BUFSIZE/2];
+static q15_t fir_state[BUFSIZE + NUMTAPS];
+const q15_t fir_coeffs[NUMTAPS] = {112,243,618,1293,2217,3225,4089,4587,4587,4089,3225,2217,1293,618,243,112};
 uint32_t elapsedTime;
 int bufferFlag = 0;
 volatile uint16_t clk_transmit = 0;
 uint8_t data_out[3];
+
+uint32_t blockSize = BUFSIZE;
+uint32_t numBlocks = BUFSIZE/BLOCKSIZE;
 
 
 static const uint8_t channel2sc1a[] = {
@@ -282,10 +289,10 @@ int main(){
     SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(1);
 
     //pgaInit();
-    adcInit();
+    /*adcInit();
     cmpInit();
     pdbInit();
-    dmaInit();
+    dmaInit();*/
     //dacInit();
 
 
@@ -308,59 +315,71 @@ int main(){
 
     arm_cfft_radix4_instance_q15 S; 
     arm_cfft_radix4_instance_q15 Si; 
+    arm_fir_instance_q15 fir;
     arm_cfft_radix4_init_q15(&S, 1024, 0, 1); 
-    arm_cfft_radix4_init_q15(&Si, 1024, 1, 1); 
+    arm_cfft_radix4_init_q15(&Si, 1024, 1, 1);
+    arm_fir_init_q15(&fir, NUMTAPS, (q15_t *) &fir_coeffs[0], &fir_state[0], blockSize);
     hilbert_init();
 
 
     uint8_t data_in[3];
     
-
+    uint16_t i = 0;
     uint16_t delay_time = 0;
     int old_bufferFlag = bufferFlag;
-    q15_t frequencies[BUFSIZE/2];
+    q15_t angles[BUFSIZE/2];
+    q15_t angles_unwrapped[BUFSIZE/2];
+    //q15_t angles_filtered[BUFSIZE/2];
+    //q15_t frequencies[(BUFSIZE/2)-1];
     while(1){    
 
 
-        if(bufferFlag != old_bufferFlag){
-            uint16_t o = 0;
+        //if(bufferFlag != old_bufferFlag){
+        if(i++%30000==0){
+            uint16_t o;
             // Interlace ADC values for complex fft
-            for(o = 0; o<BUFSIZE;o+=2){
+            /*for(o = 0; o<BUFSIZE;o+=2){
                 if(bufferFlag == 0)
                     buffer1[o] = samples[o/2];
                 else
                     buffer1[o] = samples2[o/2];
                 buffer1[o+1] = 0;
+            }*/
+            for(o = 0; o<BUFSIZE;o++){
+                buffer1[o] = buffer3[o];    
             }
             arm_cfft_radix4_q15(&S, buffer1);                        // Input: Q1.15, Output: Q11.5
             arm_shift_q15(buffer1, 3, buffer1, BUFSIZE);
             arm_cmplx_mult_real_q15(buffer1, h, buffer1, BUFSIZE/2); // Input: Q8.8 & Q2.14, Output: Q10.22 --SAT--> Q1.15
-            arm_cfft_radix4_q15(&Si, buffer1);                       // Outputs Q12.4
+            arm_cfft_radix4_q15(&Si, buffer1);                       // Input: Q1.15, Output: Q10.6
 
-            
+            arm_shift_q15(buffer1, 7, buffer1, BUFSIZE);
+            atan2_fp(buffer1, angles, BUFSIZE);           // Input: Q3.13, Output: Q??.??
+            arm_shift_q15(angles, -6, angles, BUFSIZE/2);
+            unwrap_fp(angles, angles_unwrapped, BUFSIZE/2);
 
-            frequency_calc(buffer1, frequencies, BUFSIZE);
+            //arm_fir_fast_q15(&fir, angles, angles_filtered, BUFSIZE);
             /*
-                if(o > 0){
-                    frequencies[o/2] = angles[o/2] - angles[(o/2)-1];
-                }*/
+            for(o = 1; o < BUFSIZE/2; o++){
+                frequencies[o-1] = angles_filtered[o] - angles_filtered[o-1];
+            }*/
             // Sync clock 
-            sync_clock();
+            //sync_clock();
             // Calculate starting period of burst and save timestamp
 
             #ifdef DEBUG_FFT
-                for(o = 0; o<BUFSIZE;o++){
+                for(o = 0; o<(BUFSIZE/2);o++){
                     if(o%16==0 && o>0)
                         xprintf(";\r\n");
-                    xprintf("%d", buffer1[o]);
-                    if(o!=BUFSIZE-1)
+                    xprintf("%d", angles_unwrapped[o]);
+                    if(o!=(BUFSIZE/2)-1)
                         xprintf(", ");
                 }
             #endif
         }
-
+        //delay(100);
         _delay_us(300);
-        if(nrf24_dataReady()){
+        /*if(nrf24_dataReady()){
             nrf24_getData(data_in);
             if(data_in[0] == 'c'){
                 NVIC_DISABLE_IRQ(IRQ_PIT_CH0);
@@ -380,6 +399,6 @@ int main(){
 
             }                      
         }
-        old_bufferFlag = bufferFlag;
+        old_bufferFlag = bufferFlag;*/
     }
 }
