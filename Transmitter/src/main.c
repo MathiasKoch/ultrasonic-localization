@@ -178,14 +178,15 @@ int main(){
                 case 'c':
                     xprintf("Transmitter >> Received data\r\n");
                     sync_timer();
-                    transmit();
+                    
                     break;
 
                 default:
                     break;
             }   
         }
-
+        transmit();
+        delay(1000);
         if(!calibrated)
             calibrate();
     }

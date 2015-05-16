@@ -129,7 +129,6 @@ void atan2_fp(q15_t * cmplxInp, q15_t * realOut, uint32_t blockSize)
 
 		*__SIMD32(realOut)++ = outA;
 
-		/* Decrement the loop counter /
 		blkCnt--;
 	}*/
 
@@ -173,4 +172,35 @@ void unwrap_fp(q15_t * pSrc, q15_t * pDst, uint32_t blockSize){
 		*pDst++ = out;
 		blkCnt--;
 	}
+}
+
+#define SEPERATION 16
+#define BURN 25
+#define INDEX_CORRECTION 3
+
+uint32_t change_detect(q15_t * pSrc, uint32_t blockSize){
+	uint32_t blkCnt;     			/* loop counter */
+	uint16_t index = 0;
+	q15_t inA1, inA2, diff, temp;
+
+  	/*loop Unrolling */
+	blkCnt = (SEPERATION + BURN);
+	diff = 0;
+
+	/* First part of the processing with loop unrolling.  Compute 4 outputs at a time.    
+	** a second loop below computes the remaining 1 to 3 samples. */
+	pSrc+=(SEPERATION + BURN);
+
+	while(blkCnt < (blockSize-BURN)){
+
+		inA1 = *pSrc;
+		inA2 = *(pSrc++ - SEPERATION);
+		temp = inA1 - inA2;
+		if(temp > diff){
+			index = blkCnt;
+			diff = temp;
+		}
+		blkCnt++;
+	}
+	return index-INDEX_CORRECTION;
 }
