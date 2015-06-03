@@ -69,8 +69,9 @@ int main()
         nrf24_powerUpRx();
         _delay_us(400);
         if(nrf24_dataReady()){
+            xprintf("\r\nReceived data\t");
             nrf24_getData(data_in);      
-            if(data_in[0] == 'c'){
+            /*if(data_in[0] == 'c'){
                 data_out[0] = 'c';
                 NVIC_DISABLE_IRQ(IRQ_PIT_CH0);
                 data_out[1] = (clk >> 8) & 0xFF;
@@ -85,9 +86,10 @@ int main()
                 }else if(temp == NRF24_MESSAGE_LOST){
 
                 }
-            }
+            }*/
 
         }
+        //xprintf("Still running\t");
         _delay_ms(3);
     }
 }

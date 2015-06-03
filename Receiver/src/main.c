@@ -1,37 +1,37 @@
-#include <avr/io.h>
+
+#include "mk20dx128.h"
 #define ARM_MATH_CM4
 #include <arm_math.h>
 //#include <common.h>
-#include <util/delay.h>
-#include <usb_serial.h>
-#include <stdio.h>
+//#include <stdio.h>
 #include "nrf24.h"
-#include "xprintf.h"
 #include "frequency_calc.h"
+#include "adc.h"
 
-
-#define PDB_CH0C1_TOS 0x0100
-#define PDB_CH0C1_EN 0x01
-#define PDB_SC_PDBIF_MASK 0x40u
-#define TIE 0x2
-#define TEN 0x1
 #define uint16_MAX 65535
+#define FS 800000
+#define BUFSIZE 1024
+#define NUMTAPS 16
 
 //#define DEBUG_RF
-#define DEBUG_FFT
-//#define DEBUG_SAMPLE
+//#define DEBUG_FFT
+#define DEBUG_SAMPLE
 
-#define BUFSIZE 2048
-#define NUMTAPS 16
+#if defined(DEBUG_RF) || defined(DEBUG_FFT) || defined(DEBUG_SAMPLE)
+    #define DEBUG
+    #include <usb_serial.h>
+    #include "xprintf.h"
+#endif
+
+
 
 uint8_t tx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 uint8_t rx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 volatile uint16_t clk;
 
-extern q15_t buffer3[BUFSIZE]; 
 static q15_t buffer1[BUFSIZE/2];
 static q15_t h[BUFSIZE/2];
-static q15_t samples[BUFSIZE/2];
+static q15_t samples[BUFSIZE];
 static q15_t samples2[BUFSIZE/2];
 static q15_t fir_state[BUFSIZE/2 + NUMTAPS];
 const q15_t fir_coeffs[NUMTAPS] = {112,243,618,1293,2217,3225,4089,4587,4587,4089,3225,2217,1293,618,243,112};
@@ -39,90 +39,8 @@ static volatile int bufferFlag = 0;
 volatile uint16_t clk_transmit = 0;
 uint8_t data_out[3];
 
-static const uint8_t channel2sc1a[] = {
-    5, 14, 8, 9, 13, 12, 6, 7, 15, 4,
-    0, 19, 3, 21, 26, 22
-};
-
-void adcCalibrate() {
-    uint16_t sum;
-
-    // Begin calibration
-    ADC0_SC3 = ADC_SC3_CAL;
-    // Wait for calibration
-    while (ADC0_SC3 & ADC_SC3_CAL);
-
-    // Plus side gain
-    sum = ADC0_CLPS + ADC0_CLP4 + ADC0_CLP3 + ADC0_CLP2 + ADC0_CLP1 + ADC0_CLP0;
-    sum = (sum / 2) | 0x8000;
-    ADC0_PG = sum;
-
-    // Minus side gain (not used in single-ended mode)
-    sum = ADC0_CLMS + ADC0_CLM4 + ADC0_CLM3 + ADC0_CLM2 + ADC0_CLM1 + ADC0_CLM0;
-    sum = (sum / 2) | 0x8000;
-    ADC0_MG = sum;
-}
-
-/*
-    ADC_CFG1_ADIV(2)         Divide ratio = 4 (F_BUS = 48 MHz => ADCK = 12 MHz)
-    ADC_CFG1_MODE(2)         Single ended 10 bit mode
-    ADC_CFG1_ADLSMP          Long sample time
-*/
-#define ADC_CONFIG1 (ADC_CFG1_ADIV(1) | ADC_CFG1_MODE(2) | ADC_CFG1_ADLSMP)
-
-/*
-    ADC_CFG2_MUXSEL          Select channels ADxxb
-    ADC_CFG2_ADLSTS(3)       Shortest long sample time
-*/
-#define ADC_CONFIG2 (ADC_CFG2_MUXSEL | ADC_CFG2_ADLSTS(3))
-
-
-void adcInit() {
-    ADC0_CFG1 = ADC_CONFIG1;
-    ADC0_CFG2 = ADC_CONFIG2;
-    // Voltage ref vcc, hardware trigger, DMA
-    ADC0_SC2 = ADC_SC2_REFSEL(0) | ADC_SC2_ADTRG | ADC_SC2_DMAEN;
-    adcCalibrate();
-    //ADC0_SC3 = ADC_SC3_AVGE | ADC_SC3_AVGS(0);
-    ADC0_SC3 |= ADC_SC3_ADCO;
-
-    ADC0_SC1A = ADC_SC1_AIEN  | channel2sc1a[7];     // Input on A3
-    //NVIC_ENABLE_IRQ(IRQ_ADC0);
-}
-
-/*
-    PDB_SC_TRGSEL(15)        Select software trigger
-    PDB_SC_PDBEN             PDB enable
-    PDB_SC_PDBIE             Interrupt enable
-    PDB_SC_CONT              Continuous mode
-    PDB_SC_PRESCALER(0)      Prescaler = 1
-    PDB_SC_MULT(0)           Prescaler multiplication factor = 1
-*/
-#define PDB_CONFIG (PDB_SC_TRGSEL(15) | PDB_SC_PDBEN \
-    | PDB_SC_CONT | PDB_SC_PRESCALER(0) | PDB_SC_MULT(0))
-
-#define PDB_PERIOD ((F_BUS / 400000)-1)     // Samplerate
-
-void pdbInit() {
-    // Enable PDB clock
-    SIM_SCGC6 |= SIM_SCGC6_PDB;
-    // Timer period
-    PDB0_MOD = PDB_PERIOD;
-    // Interrupt delay
-    PDB0_IDLY = 0;
-    // Enable pre-trigger
-    PDB0_CH0C1 = PDB_CH0C1_TOS | PDB_CH0C1_EN;
-    // PDB0_CH0DLY0 = 0;
-    PDB0_SC = PDB_CONFIG;
-    // Software trigger (reset and restart counter)
-    PDB0_SC |= PDB_SC_SWTRIG;
-
-    PDB0_SC |= PDB_SC_LDOK;
-    //NVIC_ENABLE_IRQ(IRQ_PDB);
-}
 
 void dmaInit() {
-    bufferFlag = 0;
     // Enable DMA, DMAMUX clocks
     SIM_SCGC7 |= SIM_SCGC7_DMA;
     SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
@@ -158,13 +76,12 @@ void dmaInit() {
     // Enable request input signal for channel 0
     DMA_SERQ = 0;
 
+
     // Enable interrupt request
     NVIC_ENABLE_IRQ(IRQ_DMA_CH0);
 }
 
-// Remember DAC gain!
 void setGain(uint16_t gain){
-
     *(int16_t *)&(DAC0_DAT0L) = gain;
     /* PGA gain = 2^(uint8_t gain) */
     /*if(gain <= 6)
@@ -174,40 +91,7 @@ void setGain(uint16_t gain){
 void dacInit(void){
     SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
     DAC0_C0 = DAC_C0_DACEN | DAC_C0_DACRFS;
-    setGain(700);
-}
-
-void pgaInit(void){
-    // Run PGA in normal power mode and enable PGA
-    ADC0_PGA |= ADC0_PGA_PGALPB | ADC0_PGA_PGAEN;
-}
-
-void enableCmp(uint8_t enable){
-    //if(enable == 0x0)
-    //    ADC0_SC2 &= ~ADC_SC2_ACFE;
-    //else
-        ADC0_SC2 |= ADC_SC2_ACFE;
-}
-
-void setCmp(uint16_t cmp){
-    ADC0_CV1 = 600;
-    //ADC0_CV2 = 200;
-}
-
-void cmpInit(void){
-    // Enable compare function, set greater than and enable range function
-    //enableCmp(0x1);
-    ADC0_SC2 |= ADC_SC2_ACFGT | ADC_SC2_ACFE;// | ADC_SC2_ACREN;
-    //*(int16_t *)&(ADC0_CV1) = 600;
-    ADC0_CV1 = 1000;
-    //*(int16_t *)&(ADC0_CV2) = 100;
-    //setCmp(256);
-}
-
-void pdb_isr(void){
-    PDB0_SC &= ~PDB_SC_PDBIF_MASK;  // clear interrupt mask
-    //cycle_flags = 0;
-    return;
+    setGain(500);
 }
 
 void dma_ch0_isr(void){
@@ -225,7 +109,6 @@ void dma_ch0_isr(void){
 
     bufferFlag = 1;
     DMA_CINT = 0;
-    return;
 }
 
 void pit0_isr(){
@@ -233,7 +116,6 @@ void pit0_isr(){
     if(clk++ == uint16_MAX){
         clk = 0;
     }
-    return;
 }
 
 #define CLOCK_PERIOD ((F_BUS / 1000000)-1)    // 1 Mhz = 1 us
@@ -245,7 +127,6 @@ void clock_init(void){
     PIT_LDVAL0 = CLOCK_PERIOD;
     PIT_TCTRL0 = TIE;
     PIT_TCTRL0 |= TEN;
-    PIT_TFLG0 |= 1;
 }
 
 void hilbert_init(void){ // Q2.14 format
@@ -276,13 +157,10 @@ void sync_clock(){
     uint8_t temp = nrf24_lastMessageStatus();
     uint8_t retrans_cnt = nrf24_retransmissionCount();
     if(temp == NRF24_TRANSMISSON_OK){ 
-        
         clk_transmit += retrans_cnt * 251;
         #ifdef DEBUG_RF
             xprintf("Receiver >> Contacted beacon successfully in %u retransmits\r\n", retrans_cnt);
         #endif
-        
-
     }else if(temp == NRF24_MESSAGE_LOST){
         #ifdef DEBUG_RF
             xprintf("Receiver >>   !!!   Contact to beacon lost with %u retransmits\r\n", retrans_cnt);
@@ -300,10 +178,16 @@ int main(){
     PORTD_PCR0 |= PORT_PCR_MUX(1);
     GPIOD_PDDR |= 1<<0; 
 
-    //pgaInit();
-    cmpInit();
-    adcInit();
-    pdbInit();
+    ADC_VALS adc;
+
+    adc.bufsize = BUFSIZE;
+    adc.fs = 600000;
+    adc.channel = 0x06;
+    adc.pause_samples = 1024;
+    adc.CV1 = 868;//771;
+    adc.CV2 = 682;//407;
+
+    adc_init(&adc);
     dmaInit();
     dacInit();
 
@@ -318,10 +202,8 @@ int main(){
     
  
     
-    xdev_out(usb_serial_putchar);
-    #ifdef DEBUG_RF
-        /* Init the xprintf library */
-        xprintf("\r\n> Device setup to receive\r\n");
+    #ifdef DEBUG
+        xdev_out(usb_serial_putchar);
     #endif
 
 
@@ -337,18 +219,19 @@ int main(){
     uint8_t data_in[3];
     
     uint32_t i = 0;
+    uint16_t u = 0;
     uint16_t delay_time = 0;
     q15_t angles[BUFSIZE/2];
     q15_t angles_filtered[BUFSIZE/2];
     
     q15_t frequencies[BUFSIZE/8];
     q15_t frequencies_finished[(BUFSIZE/8)-1];
-    while(1){    
-
-        if(ADC0_SC1A & ADC_SC1_COCO){
-            GPIOD_PDOR ^= 1<<0;
-            //ADC0_RA;
+    while(1){
+        for(u = 0; u<BUFSIZE;u+=8){
+            xprintf("%d, %d, %d, %d, %d, %d, %d, %d\r\n", samples[u], samples[u+1], samples[u+2], samples[u+3], samples[u+4], samples[u+5], samples[u+6], samples[u+7]);    
         }
+        xprintf("\r\n\r\n\r\n\r\n\r\n\r\n");
+        delay(10000);
         //if(){
         /*if(i++%900000 == 0){
             uint16_t o;

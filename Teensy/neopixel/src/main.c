@@ -16,12 +16,12 @@ int main(){
     while(1){    
         int x = 15;
         for(i = 0; i < 16; i++){
-            neo_setPixel(i, 0x0000FF);
+            neo_setPixel(i, 0x000020);
             if(i>0)
                 neo_setPixel(i-1, 0x000000);
             if(i==0)
                 neo_setPixel(15, 0x000000);
-            neo_setPixel(x, 0xFF0000);
+            neo_setPixel(x, 0x200000);
             if(x==15)
                 neo_setPixel(0, 0x000000);
             if(x<15)

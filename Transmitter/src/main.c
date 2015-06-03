@@ -16,7 +16,10 @@
 
 // pin defines
 #define PWM 6
-#define HBRO_E 8
+#define ENABLE 21
+#define MODE1 23
+#define MODE2 24
+#define HBRO_E 1
 #define MUX_1 17
 #define MUX_2 16
 
@@ -27,8 +30,8 @@
 #define MODE_SAMPLE_180 4
 #define MODE_SAMPLE_270 5
 
-#define PERIOD_SHIFT 15
-#define PERIOD_TOTAL 30
+#define PERIOD_SHIFT 40
+#define PERIOD_TOTAL 80
 
 uint8_t rx_address[5] = {0xD7,0xD7,0xD7,0xD7,0xD7};
 uint8_t tx_address[5] = {0xE7,0xE7,0xE7,0xE7,0xE7};
@@ -82,6 +85,7 @@ void set_mode(int mode){
 void pit1_isr(){
     PIT_TFLG1 = 1;
     if(period_cnt != PERIOD_SHIFT*2 && period_cnt <= PERIOD_TOTAL*2)   
+    //if(period_cnt <= PERIOD_TOTAL*2-1)   
         digitalWrite(PWM, !digitalRead(PWM));
     if(period_cnt < (PERIOD_TOTAL*2) + 5)
         period_cnt++;
@@ -147,8 +151,9 @@ int main(){
     /* Init the xprintf library */
     xdev_out(usb_serial_putchar);
 
-    pinMode(HBRO_E, OUTPUT);
+    //pinMode(HBRO_E, OUTPUT);
     pinMode(PWM, OUTPUT);
+    pinMode(ENABLE, OUTPUT);
 
     /* Init timers and RF */
     pwm_init();
@@ -164,10 +169,11 @@ int main(){
     /* Init mode to transmit mode */
     set_mode(MODE_TRANSMIT);
 
+    digitalWrite(ENABLE, HIGH);
     digitalWrite(PWM, HIGH);
 
     xprintf("\r\n> Device setup to transmit\r\n");
-    digitalWrite(HBRO_E, HIGH);
+    //digitalWrite(HBRO_E, HIGH);
 
     uint8_t data_in[3];
     while(1){    

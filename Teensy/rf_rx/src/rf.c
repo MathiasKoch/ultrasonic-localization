@@ -73,6 +73,7 @@ int main(){
     nrf24_tx_address(tx_address);
     nrf24_rx_address(rx_address);
     while(1){    
+
         NVIC_DISABLE_IRQ(IRQ_PIT_CH0);
         clk_transmit = clk;
         NVIC_ENABLE_IRQ(IRQ_PIT_CH0);
@@ -87,6 +88,7 @@ int main(){
 
         if(temp == NRF24_TRANSMISSON_OK){ 
 
+                    xprintf("Transmission OK\r\n");
             nrf24_powerUpRx();
             _delay_us(400);            
             if(nrf24_dataReady()){
@@ -98,16 +100,20 @@ int main(){
                     NVIC_DISABLE_IRQ(IRQ_PIT_CH0);
                     clk = (((uint16_t)data_in[1] << 8) | data_in[2]) + delay_time;
                     NVIC_ENABLE_IRQ(IRQ_PIT_CH0);
-                    GPIOD_PDOR ^= 1<<1;
 
                 }                      
             }
 
         }else if(temp == NRF24_MESSAGE_LOST){
-                    GPIOD_PDOR ^= 1<<2;
+            xprintf("Transmission Failed\r\n");
+    
 
+        }else{
+            
+            xprintf("Something else\r\n");
         }
         _delay_ms(3);
+        delay(100);
         
     }
 }
