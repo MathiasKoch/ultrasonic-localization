@@ -12,7 +12,6 @@
 #define uint16_MAX 65535
 #define FS 600000
 #define BUFSIZE 1000
-#define NUMTAPS 16
 
 //#define DEBUG_RF
 //#define DEBUG_FFT
@@ -37,48 +36,6 @@ static q15_t samples[BUFSIZE];
 //static q15_t samples2[BUFSIZE/2];
 static volatile int bufferFlag = 0;
 
-
-void dmaInit() {
-    // Enable DMA, DMAMUX clocks
-    SIM_SCGC7 |= SIM_SCGC7_DMA;
-    SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
-
-    // Use default configuration
-    DMA_CR = 0;
-
-    // Source address
-    DMA_TCD0_SADDR = &ADC0_RA;
-    // Don't change source address
-    DMA_TCD0_SOFF = 0;
-    DMA_TCD0_SLAST = 0;
-    // Destination address
-    DMA_TCD0_DADDR = samples;
-    // Destination offset (2 byte)
-    DMA_TCD0_DOFF = 2;
-    // Restore destination address after major loop
-    DMA_TCD0_DLASTSGA = -sizeof(samples);
-    // Source and destination size 16 bit
-    DMA_TCD0_ATTR = DMA_TCD_ATTR_SSIZE(1) | DMA_TCD_ATTR_DSIZE(1);
-    // Number of bytes to transfer (in each service request)
-    DMA_TCD0_NBYTES_MLNO = 2;
-    // Set loop counts
-    DMA_TCD0_CITER_ELINKNO = sizeof(samples) / 2;
-    DMA_TCD0_BITER_ELINKNO = sizeof(samples) / 2;
-    // Enable interrupt (end-of-major loop)
-    DMA_TCD0_CSR = DMA_TCD_CSR_INTMAJOR;
-
-    // Set ADC as source (CH 0), enable DMA MUX
-    DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
-    DMAMUX0_CHCFG0 = DMAMUX_SOURCE_ADC0 | DMAMUX_ENABLE;
-
-    // Enable request input signal for channel 0
-    DMA_SERQ = 0;
-
-
-    // Enable interrupt request
-    NVIC_ENABLE_IRQ(IRQ_DMA_CH0);
-}
-
 void setGain(uint16_t gain){
     *(int16_t *)&(DAC0_DAT0L) = gain;
     /* PGA gain = 2^(uint8_t gain) */
@@ -86,7 +43,7 @@ void setGain(uint16_t gain){
         ADC0_PGA |= ADC0_PGA_PGAG(gain);*/
 }
 
-void dacInit(void){
+void dac_init(void){
     SIM_SCGC2 |= SIM_SCGC2_DAC0; // enable DAC clock
     DAC0_C0 = DAC_C0_DACEN | DAC_C0_DACRFS;
     setGain(500);
@@ -117,16 +74,13 @@ void handleRF(){
         nrf24_getData(data_in);
         switch(data_in[0]){
             case 'f':
-                if(sync.mode == SYNC_MODE_MASTER)
-                    enableFastSync();
+                enableFastSync();
                 break;
             case 'r':
-                if(sync.mode == SYNC_MODE_SLAVE)
-                    //resetTimeSync();
+                //resetTimeSync();
                 break;
             case 's':
-                if(sync.mode == SYNC_MODE_SLAVE)
-                    calcTimeSync(data_in);
+                calcTimeSync(data_in);
                 break;
         }
     }
@@ -140,9 +94,6 @@ int main(){
     GPIOB_PDDR |= 1<<17;
 
 
-    
-
-
     ADC_VALS adc;
 
     adc.bufsize = BUFSIZE;
@@ -153,8 +104,10 @@ int main(){
     adc.CV2 = 682;//407;
 
     adc_init(&adc);
-    dmaInit();
-    dacInit();
+    dma_init(samples);
+    dac_init();
+
+    PORTB_PCR0 |= PORT_PCR_MUX(1) | PORT_PCR_IRQC(2);
     sync_init(SYNC_MODE_MASTER, DMAMUX_SOURCE_PORTB);
 
 
@@ -165,16 +118,14 @@ int main(){
     nrf24_tx_address(tx_address);
     nrf24_rx_address(rx_address);
     
- 
-    
     #ifdef DEBUG
         xdev_out(usb_serial_putchar);
     #endif
-    q15_t Qi1[2000];
-    q15_t Qi2[2000];
-    q15_t phase1[1000];
-    q15_t phase2[1000];
-    q15_t phase_diff[1000];
+    q15_t Qi1[BUFSIZE*2];
+    q15_t Qi2[BUFSIZE*2];
+    q15_t phase1[BUFSIZE];
+    q15_t phase2[BUFSIZE];
+    q15_t phase_diff[BUFSIZE];
 
 
     uint16_t index = 0;
@@ -184,20 +135,20 @@ int main(){
           //  handleRF();
         if(bufferFlag == 1){
             bufferFlag = 0;
-            arm_cmplx_mult_real_q15(w1_cs, buffer3, Qi1, 1000);
-            arm_cmplx_mult_real_q15(w2_cs, buffer3, Qi2, 1000);
-            atan2_fp(Qi1, phase1, 2000);  
-            atan2_fp(Qi2, phase2, 2000);  
-            arm_sub_q15(phase2,phase1,phase_diff, 1000);
-            if(phase_diff[500] == 0){
-                index = 500;
-            }else if(phase_diff[500] < 0){
-                for(index = 500; index > 0; index--){
+            arm_cmplx_mult_real_q15(w1_cs, buffer3, Qi1, BUFSIZE);
+            arm_cmplx_mult_real_q15(w2_cs, buffer3, Qi2, BUFSIZE);
+            atan2_fp(Qi1, phase1, BUFSIZE*2);  
+            atan2_fp(Qi2, phase2, BUFSIZE*2);  
+            arm_sub_q15(phase2,phase1,phase_diff, BUFSIZE);
+            if(phase_diff[BUFSIZE/2] == 0){
+                index = BUFSIZE/2;
+            }else if(phase_diff[BUFSIZE/2] < 0){
+                for(index = BUFSIZE/2; index > 0; index--){
                     if(phase_diff[index] > 0)
                         break;
                 }
             }else{
-                for(index = 500; index < 1000; index++){
+                for(index = BUFSIZE/2; index < BUFSIZE; index++){
                     if(phase_diff[index] < 0)
                         break;
                 }

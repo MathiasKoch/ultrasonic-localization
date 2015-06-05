@@ -79,7 +79,7 @@ endif
 LDFLAGS = -Os -Wl,--gc-sections -mcpu=cortex-m4 -mthumb -T$(LDSCRIPT)
 
 # additional libraries to link
-LIBS = -lm
+LIBS = -L$(LIBRARYPATH)/CMSIS/Lib/GCC/ -larm_cortexM4l_math -lm
 
 # names for the compiler programs
 CC = $(abspath $(COMPILERPATH))/arm-none-eabi-gcc

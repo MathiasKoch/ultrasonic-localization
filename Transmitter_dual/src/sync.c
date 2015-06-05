@@ -3,8 +3,6 @@
 #include "nrf24.h"
 
 
-TimeSync sync;
-
 void sync_init(uint8_t mode, uint8_t source){
 	sync.mode = mode;
 	sync.i = 1;
@@ -132,7 +130,6 @@ void resetTimeSync(){
 
 void calcTimeSync(uint8_t * data){
     uint16_t n;
-    uint16_t im;
     uint32_t offset;
     uint32_t skew;
     uint64_t offset_var = 0;
@@ -143,16 +140,16 @@ void calcTimeSync(uint8_t * data){
 
     sync.i = (data[1]<<8) + data[2]; // i starts from 1
 
-    im = (sync.i - 1) % TST_SIZE;
-    sync.GT[im] = (data[3]<<24) + (data[4]<<16) + (data[5]<<8) + data[6];
+    sync.im = (sync.i - 1) % TST_SIZE;
+    sync.GT[sync.im] = (data[3]<<24) + (data[4]<<16) + (data[5]<<8) + data[6];
     sync.LT[sync.i%TST_SIZE] = MAX_US - sync.nLT;
 
     
     if(sync.i <= TST_SIZE)
         sync.n = sync.i;
 
-    sync.DIFF[im] = (sync.GT[im] - sync.LT[im]);
-    
+    sync.DIFF[sync.im] = (sync.GT[sync.im] - sync.LT[sync.im]);
+    // TODO: Check missing packet (i)
     if(sync.n > MIN_TST_ENTRIES){
         offset_var = 0;
         skew_var = 0;
@@ -169,16 +166,20 @@ void calcTimeSync(uint8_t * data){
             skew_var2 += (sync.LT[n] - sync._LT) * (sync.DIFF[n] - sync.OFFSET);
         }
         skew = (uint32_t)(skew_var2 / skew_var);
-        GTx = (sync.LT[im] + offset + skew * (sync.LT[im] - sync._LT)) - 1;
-        if(GTx > (sync.GT[im] + MAX_AVG_DIFF) || GTx < (sync.GT[im] - MAX_AVG_DIFF))
-            sync.VALID[im] = 0;
+        GTx = (sync.LT[sync.im] + offset + skew * (sync.LT[sync.im] - sync._LT)) - 1;
+        if(GTx > (sync.GT[sync.im] + MAX_AVG_DIFF) || GTx < (sync.GT[sync.im] - MAX_AVG_DIFF))
+            sync.VALID[sync.im] = 0;
         else{
-            sync.VALID[im] = 1;
+            sync.VALID[sync.im] = 1;
             sync.SKEW = skew;
             sync.OFFSET = offset;
         }
     }else{
-        sync.VALID[im] = 0;
+        sync.VALID[sync.im] = 0;
     }
-    //xprintf("Valid: %d, GT(%10ld), GTx(%10ld) \t diff: %d\r\n", sync.VALID[im], sync.GT[im], GTx, sync.GT[im]-GTx);
+    //xprintf("Valid: %d, GT(%10ld), GTx(%10ld) \t diff: %d\r\n", sync.VALID[sync.im], sync.GT[sync.im], GTx, sync.GT[sync.im]-GTx);
+}
+
+uint32_t calculateGT(uint32_t timeS){
+    return (timeS + sync.OFFSET + sync.SKEW * (timeS - sync._LT)) - 1;
 }

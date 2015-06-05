@@ -4,6 +4,47 @@
 
 ADC_VALS * v;
 
+void dma_init(q15_t * address) {
+    // Enable DMA, DMAMUX clocks
+    SIM_SCGC7 |= SIM_SCGC7_DMA;
+    SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
+
+    // Use default configuration
+    DMA_CR = 0;
+
+    // Source address
+    DMA_TCD0_SADDR = &ADC0_RA;
+    // Don't change source address
+    DMA_TCD0_SOFF = 0;
+    DMA_TCD0_SLAST = 0;
+    // Destination address
+    DMA_TCD0_DADDR = address;
+    // Destination offset (2 byte)
+    DMA_TCD0_DOFF = 2;
+    // Restore destination address after major loop
+    DMA_TCD0_DLASTSGA = -sizeof(address);
+    // Source and destination size 16 bit
+    DMA_TCD0_ATTR = DMA_TCD_ATTR_SSIZE(1) | DMA_TCD_ATTR_DSIZE(1);
+    // Number of bytes to transfer (in each service request)
+    DMA_TCD0_NBYTES_MLNO = 2;
+    // Set loop counts
+    DMA_TCD0_CITER_ELINKNO = sizeof(address) / 2;
+    DMA_TCD0_BITER_ELINKNO = sizeof(address) / 2;
+    // Enable interrupt (end-of-major loop)
+    DMA_TCD0_CSR = DMA_TCD_CSR_INTMAJOR;
+
+    // Set ADC as source (CH 0), enable DMA MUX
+    DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
+    DMAMUX0_CHCFG0 = DMAMUX_SOURCE_ADC0 | DMAMUX_ENABLE;
+
+    // Enable request input signal for channel 0
+    DMA_SERQ = 0;
+
+
+    // Enable interrupt request
+    NVIC_ENABLE_IRQ(IRQ_DMA_CH0);
+}
+
 int adc_calibrate(void){
     ADC0_CFG1 |= (ADC_CFG1_MODE(3)  |       // 16 bits mode
                   ADC_CFG1_ADICLK(1)|       // Input Bus Clock divided by 2 (20-25 MHz out of reset (FEI mode) / 2)

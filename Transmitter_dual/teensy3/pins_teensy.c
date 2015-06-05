@@ -154,7 +154,7 @@ void detachInterrupt(uint8_t pin)
 	__enable_irq();
 }
 
-
+/*
 void porta_isr(void)
 {
 	uint32_t isfr = PORTA_ISFR;
@@ -221,7 +221,7 @@ void porte_isr(void)
 }
 
 
-
+*/
 
 unsigned long rtc_get(void)
 {

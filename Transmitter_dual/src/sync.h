@@ -1,3 +1,6 @@
+#ifndef SYNC
+#define SYNC
+
 #include <avr/io.h>
 
 #define TST_SIZE 4
@@ -28,21 +31,24 @@ typedef struct {
     uint8_t n;
 
 // Master mode:
-    uint32_t GTm; 
+    volatile uint32_t GTm; 
     uint32_t nGT;
-    uint8_t sent;
+    volatile uint8_t sent;
     uint32_t SCP_normal;
     uint32_t SCP_fast;
 
 // Shared:
-    uint32_t i;
+    volatile uint32_t i;
+    uint32_t im;
     uint8_t mode;
-    uint8_t fastSyncCounter;
+    volatile uint8_t fastSyncCounter;
     uint8_t fastSyncEnabled;
 
 } TimeSync; 
 
-uint8_t receivedRF;
+TimeSync sync;
+
+volatile uint8_t receivedRF;
 
 void sync_init(uint8_t mode, uint8_t source);
 void sync_dma_init(uint8_t source);
@@ -52,3 +58,6 @@ void disableFastSync(void);
 void requestFastSync(void);
 void resetTimeSync(void);
 void calcTimeSync(uint8_t * data);
+uint32_t calculateGT(uint32_t timeS);
+
+#endif
