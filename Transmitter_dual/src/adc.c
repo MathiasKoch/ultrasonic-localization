@@ -1,7 +1,5 @@
 #include "adc.h"
 
-
-
 ADC_VALS * v;
 
 void dma_init() {
@@ -13,36 +11,36 @@ void dma_init() {
     DMA_CR = 0;
 
     // Source address
-    DMA_TCD0_SADDR = &ADC1_RA;
+    DMA_TCD4_SADDR = &ADC1_RA;
     // Don't change source address
-    DMA_TCD0_SOFF = 0;
-    DMA_TCD0_SLAST = 0;
+    DMA_TCD4_SOFF = 0;
+    DMA_TCD4_SLAST = 0;
     // Destination address
-    DMA_TCD0_DADDR = v->destination;
+    DMA_TCD4_DADDR = v->destination;
     // Destination offset (2 byte)
-    DMA_TCD0_DOFF = 2;
+    DMA_TCD4_DOFF = 2;
     // Restore destination address after major loop
-    DMA_TCD0_DLASTSGA = -sizeof(v->destination);
+    DMA_TCD4_DLASTSGA = -sizeof(v->destination);
     // Source and destination size 16 bit
-    DMA_TCD0_ATTR = DMA_TCD_ATTR_SSIZE(1) | DMA_TCD_ATTR_DSIZE(1);
+    DMA_TCD4_ATTR = DMA_TCD_ATTR_SSIZE(1) | DMA_TCD_ATTR_DSIZE(1);
     // Number of bytes to transfer (in each service request)
-    DMA_TCD0_NBYTES_MLNO = 2;
+    DMA_TCD4_NBYTES_MLNO = 2;
     // Set loop counts
-    DMA_TCD0_CITER_ELINKNO = sizeof(v->destination) / 2;
-    DMA_TCD0_BITER_ELINKNO = sizeof(v->destination) / 2;
+    DMA_TCD4_CITER_ELINKNO = sizeof(v->destination) / 2;
+    DMA_TCD4_BITER_ELINKNO = sizeof(v->destination) / 2;
     // Enable interrupt (end-of-major loop)
-    DMA_TCD0_CSR = DMA_TCD_CSR_INTMAJOR;
+    DMA_TCD4_CSR = DMA_TCD_CSR_INTMAJOR;
 
     // Set ADC as source (CH 0), enable DMA MUX
-    DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
-    DMAMUX0_CHCFG0 = DMAMUX_SOURCE_ADC1 | DMAMUX_ENABLE;
+    DMAMUX0_CHCFG4 = DMAMUX_DISABLE;
+    DMAMUX0_CHCFG4 = DMAMUX_SOURCE_ADC1 | DMAMUX_ENABLE;
 
     // Enable request input signal for channel 0
-    DMA_SERQ = 0;
+    DMA_SERQ = 4;
 
 
     // Enable interrupt request
-    NVIC_ENABLE_IRQ(IRQ_DMA_CH0);
+    NVIC_ENABLE_IRQ(IRQ_DMA_CH4);
 }
 
 int adc_calibrate(void){
@@ -86,17 +84,29 @@ void adc_init(ADC_VALS * vals) {
     NVIC_ENABLE_IRQ(IRQ_ADC1);
     ADC1_SC1A |= ADC_SC1_ADCH(0x1F);    // Disable ADC
 
-    // PIT 1 for ADC triggering at FS [Hz]
-    SIM_SCGC6 |= SIM_SCGC6_PIT;
-    PIT_MCR = 0x00;
-    NVIC_ENABLE_IRQ(IRQ_PIT_CH0);
-    PIT_LDVAL0 = ((F_BUS / v->fs)-1);
-    PIT_TCTRL0 = TIE;
+    init_sample_timer(v->fs, 1);
 
     dma_init();
 }
 
-void adc_run(uint8_t enable){
+void init_sample_timer(uint32_t sample_freq, uint8_t ie){
+    // PIT 1 for ADC triggering at FS [Hz]
+    SIM_SCGC6 |= SIM_SCGC6_PIT;
+    PIT_MCR = 0x00;
+    PIT_LDVAL0 = ((F_BUS / sample_freq)-1);
+    if(ie){
+        NVIC_ENABLE_IRQ(IRQ_PIT_CH0);
+        PIT_TCTRL0 = TIE;
+    }else{
+        PIT_TCTRL0 = 0;
+        PIT_TCTRL0 |= TEN;
+    }
+}
+
+void adc_run(uint8_t enable, uint8_t cycle){
+    init_sample_timer(v->fs, 1);
+    v->cycle = cycle;
+    set_mux(1,0x00);
     if(enable)
         PIT_TCTRL0 |= TEN;
     else

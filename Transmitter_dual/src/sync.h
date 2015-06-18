@@ -2,17 +2,19 @@
 #define SYNC
 
 #include <avr/io.h>
+#include "nrf24.h"
 
 #define TST_SIZE 4
 #define MIN_TST_ENTRIES 3
-#define MAX_AVG_DIFF 2
+#define MAX_AVG_DIFF 3
 #define MAX_US 4000000000LL
 #define FAST_SYNC_COUNT 5
+#define SYNC_OFFSET 2
 
 #define SYNC_MODE_MASTER 0
 #define SYNC_MODE_SLAVE 1
 
-#define RF_PACKET_SIZE 7
+#define RF_PACKET_SIZE 14
 
 #define TIE 0x2
 #define TEN 0x1

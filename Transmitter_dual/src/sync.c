@@ -1,7 +1,4 @@
-
 #include "sync.h"
-#include "nrf24.h"
-
 
 void sync_init(uint8_t mode, uint8_t source){
 	sync.mode = mode;
@@ -15,8 +12,20 @@ void sync_init(uint8_t mode, uint8_t source){
 }
 
 void pit2_isr(){
-    // TODO: Handle us timer overflow!
     PIT_TFLG1 = 1;
+    if(sync.mode == SYNC_MODE_SLAVE){
+        resetTimeSync();
+        requestFastSync();
+    }else{
+        uint8_t data_out[RF_PACKET_SIZE];
+        data_out[0] = 'r';
+        nrf24_tx_address(broadCastAddress);
+        nrf24_send(data_out);        
+        while(nrf24_isSending());
+        nrf24_powerUpRx();
+
+        enableFastSync();
+    }
     return;
 }
 
@@ -54,6 +63,7 @@ void dma_ch1_isr(void){
     DMA_CINT = 1;
     if(sync.sent == 1){
         sync.sent = 0;
+        // TODO: Look into radio busy using this interrupt
         sync.GTm = MAX_US - sync.nGT;
     }else{
         receivedRF = 1;
@@ -68,8 +78,6 @@ void pit3_isr(){
         if(sync.fastSyncCounter++ > FAST_SYNC_COUNT)
             disableFastSync();
     }
-   
-    //xprintf("Transmission number: %3d \t @ GT(%3d): %ld\r\n", sync.i,sync.i-1, sync.GTm);
     sync.sent = 1;
     data_out[0] = 's';
     data_out[1] = (sync.i >> 8) & 0xFF;
@@ -78,6 +86,7 @@ void pit3_isr(){
     data_out[4] = (sync.GTm >> 16) & 0xFF;
     data_out[5] = (sync.GTm >> 8) & 0xFF;
     data_out[6] = sync.GTm & 0xFF;
+    nrf24_tx_address(broadCastAddress);
     nrf24_send(data_out);        
     while(nrf24_isSending());
     nrf24_powerUpRx();
@@ -121,11 +130,22 @@ void disableFastSync(){
 
 
 void requestFastSync(){
-    // TODO: Request fast sync from master
+    uint8_t data_out[RF_PACKET_SIZE];
+    data_out[0] = 'f';
+    nrf24_tx_address(broadCastAddress);
+    nrf24_send(data_out);        
+    while(nrf24_isSending());
+    nrf24_powerUpRx();
 }
 
 void resetTimeSync(){
-	// TODO: Drop time sync table
+    uint8_t count;
+    for(count = 0; count < TST_SIZE; count++){
+        sync.LT[count] = 0;
+        sync.DIFF[count] = 0;
+        sync.GT[count] = 0;
+        sync.n = 0;
+    }
 }
 
 void calcTimeSync(uint8_t * data){
@@ -149,7 +169,7 @@ void calcTimeSync(uint8_t * data){
         sync.n = sync.i;
 
     sync.DIFF[sync.im] = (sync.GT[sync.im] - sync.LT[sync.im]);
-    // TODO: Check missing packet (i)
+    // TODO: Check missing packet (i) and implement fast sync request
     if(sync.n > MIN_TST_ENTRIES){
         offset_var = 0;
         skew_var = 0;
@@ -166,7 +186,7 @@ void calcTimeSync(uint8_t * data){
             skew_var2 += (sync.LT[n] - sync._LT) * (sync.DIFF[n] - sync.OFFSET);
         }
         skew = (uint32_t)(skew_var2 / skew_var);
-        GTx = (sync.LT[sync.im] + offset + skew * (sync.LT[sync.im] - sync._LT)) - 1;
+        GTx = (sync.LT[sync.im] + offset + skew * (sync.LT[sync.im] - sync._LT)) + SYNC_OFFSET;
         if(GTx > (sync.GT[sync.im] + MAX_AVG_DIFF) || GTx < (sync.GT[sync.im] - MAX_AVG_DIFF))
             sync.VALID[sync.im] = 0;
         else{
@@ -181,5 +201,5 @@ void calcTimeSync(uint8_t * data){
 }
 
 uint32_t calculateGT(uint32_t timeS){
-    return (timeS + sync.OFFSET + sync.SKEW * (timeS - sync._LT)) - 1;
+    return (timeS + sync.OFFSET + sync.SKEW * (timeS - sync._LT)) - SYNC_OFFSET;
 }

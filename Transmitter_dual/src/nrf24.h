@@ -16,6 +16,7 @@
 
 #include "nRF24L01.h"
 #include <stdint.h>
+#include <util/delay.h>
 
 #define LOW 0
 #define HIGH 1
@@ -26,8 +27,12 @@
 #define NRF24_TRANSMISSON_OK 0
 #define NRF24_MESSAGE_LOST   1
 
+uint8_t broadCastAddress[5];
+
+
 /* adjustment functions */
 void    nrf24_init();
+void    nrf24_rx_broadcast_address(uint8_t* adr);
 void    nrf24_rx_address(uint8_t* adr);
 void    nrf24_tx_address(uint8_t* adr);
 void    nrf24_config(uint8_t channel, uint8_t pay_length);

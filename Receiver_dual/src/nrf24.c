@@ -40,7 +40,7 @@ void nrf24_config(uint8_t channel, uint8_t pay_length)
     // Set length of incoming payload 
     nrf24_configRegister(RX_PW_P0, 0x00); // Auto-ACK pipe ...
     nrf24_configRegister(RX_PW_P1, payload_len); // Data payload pipe
-    nrf24_configRegister(RX_PW_P2, 0x00); // Pipe not used 
+    nrf24_configRegister(RX_PW_P2, payload_len); // Pipe not used 
     nrf24_configRegister(RX_PW_P3, 0x00); // Pipe not used 
     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
@@ -55,7 +55,7 @@ void nrf24_config(uint8_t channel, uint8_t pay_length)
     nrf24_configRegister(EN_AA,(1<<ENAA_P0)|(1<<ENAA_P1)|(0<<ENAA_P2)|(0<<ENAA_P3)|(0<<ENAA_P4)|(0<<ENAA_P5));
 
     // Enable RX addresses
-    nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(0<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
+    nrf24_configRegister(EN_RXADDR,(1<<ERX_P0)|(1<<ERX_P1)|(1<<ERX_P2)|(0<<ERX_P3)|(0<<ERX_P4)|(0<<ERX_P5));
 
     // Auto retransmit delay: 250 us and Up to 5 retransmit trials
     nrf24_configRegister(SETUP_RETR,(0x00<<ARD)|(0x05<<ARC));
@@ -72,6 +72,13 @@ void nrf24_rx_address(uint8_t * adr)
 {
     spi_ce(LOW);
     nrf24_writeRegister(RX_ADDR_P1,adr,nrf24_ADDR_LEN);
+    spi_ce(HIGH);
+}
+
+void nrf24_rx_broadcast_address(uint8_t * adr) 
+{
+    spi_ce(LOW);
+    nrf24_writeRegister(RX_ADDR_P2,adr,nrf24_ADDR_LEN);
     spi_ce(HIGH);
 }
 
