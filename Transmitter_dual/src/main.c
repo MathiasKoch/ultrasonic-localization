@@ -17,8 +17,10 @@
 #define ADD_CHAN 0xF0
 
 volatile uint8_t registering;
-volatile uint8_t bufferFlag = 0;
+volatile uint8_t bufferFlag;
+uint8_t new_transmit_time;
 uint8_t LED_mode;
+uint16_t LED_counter; 
 
 DMAMEM int displayMemory[16*6];
 int drawingMemory[16*6];
@@ -37,11 +39,25 @@ void lptmr_isr(){
     LPTMR0_CSR &= ~LPTMR_TEN;
     if(mode == MODE_CALIBRATE_MASTER){  // Used for ultrasonic timeout
         // TODO: Timeout occured, invalid address check? and move on to next device.. special case considering passCount
-        requestTransmit(calibCount);
+        //requestTransmit(calibCount);
+        pit_run(0);
+        xprintf("timeout\r\n");
+        new_transmit_time = 0;
+        bufferFlag = 0;
+        mode = MODE_WAIT;
+        delay(2000);
+        requestTransmit(broadCastAddress[0]);
     }else{  // Used for registering
         if(registering == 1){
             registering = 0;
             uint8_t count = 1;
+            xprintf("\tFound %d devices on network:\r\n", positions.beaconCount);
+            for(count = 1; count < positions.beaconCount+1; count++){
+                if(positions.type[count] == 't')
+                    xprintf("\t%d. Transmitter on address: 0x%x \r\n", count, positions.address[count][0]);
+                else
+                    xprintf("\t%d. Receiver on address: 0x%x \r\n", count, positions.address[count][0]);
+            }
             for(count = 1; count < positions.beaconCount+1; count++){
                 if(positions.address[count][0] != count)
                     break;
@@ -51,7 +67,14 @@ void lptmr_isr(){
             positions.address[0][2] = ADD_CHAN;
             positions.address[0][3] = ADD_CHAN;
             positions.address[0][4] = ADD_CHAN;
-            nrf24_rx_address(positions.address[0]);
+            //nrf24_rx_address(positions.address[0]);
+            if(positions.beaconCount == 0){
+                xprintf("\r\nRegistered on network address: 0x%x\t as MASTER\r\n\r\n",positions.address[0][0]);
+                sync_init(SYNC_MODE_MASTER, DMAMUX_SOURCE_PORTD);
+            }else{
+                xprintf("\r\nRegistered on network address: 0x%x\t as SLAVE\r\n\r\n",positions.address[0][0]);
+            }
+            LED_mode = LED_NOT_CALIBRATED;
         }
         uint8_t data_out[RF_PACKET_SIZE];
         nrf24_tx_address(broadCastAddress);    
@@ -82,6 +105,8 @@ void addAddress(uint8_t add, uint8_t type){
     positions.beaconCount++;
 }
 
+#define FREQ_SEP (1/((F2-F1)*2) * 10e6)
+
 void transmit(uint8_t add){
     /*uint8_t count;
     for(count = 1; count < positions.beaconCount; count++){
@@ -89,39 +114,45 @@ void transmit(uint8_t add){
             break;
         }
     }*/
+    dac_enable();
 
+    xprintf("\r\n   !!   Transmitting ultrasonic signal\r\n");
     //switch_set(SWITCH_ALL, 1);
+    __disable_irq()
+    // 1000 us = 1 ms for half a heartbeat (To get epoch time) - TODO: Make this 1ms variable dependant on something
+    uint32_t timestamp = calculateGT((MAX_US - PIT_CVAL2) + FREQ_SEP);  
+    __enable_irq();
     dac_start();
-
-    /*uint32_t timestamp = calculateGT(PIT_CVAL2 + 1000);  // 1ms for half a heartbeat - TODO: Make this 1ms variable dependant on something
-    
-    while(spi_is_running());
+    _delay_us(1800); // Make sure DAC is done using SPI. TODO: Make this dynamic?
 
     uint8_t data_out[RF_PACKET_SIZE];
-    nrf24_tx_address(positions.address[count]);    
+
+    nrf24_tx_address(broadCastAddress);    
+    //nrf24_tx_address(positions.address[count]);    
     data_out[0] = 'e';
     data_out[1] = (timestamp>>24)&0xFF;
     data_out[2] = (timestamp>>16)&0xFF;
     data_out[3] = (timestamp>>8)&0xFF;
-    data_out[4] = timestamp & 0xFF;
-    nrf24_send(data_out);        
+    data_out[4] = timestamp & 0xFF;    
+    nrf24_send(data_out);      
     while(nrf24_isSending());
-    nrf24_powerUpRx();*/
+    nrf24_powerUpRx();
+
+    mode = MODE_WAIT;
 }
 
 void handleRF(){
     uint8_t data_in[RF_PACKET_SIZE];
     receivedRF = 0;
     uint8_t count;
-
     if(nrf24_dataReady()){
         nrf24_getData(data_in);
         switch(data_in[0]){
             case 's':   // Time sync message
                 calcTimeSync(data_in);
-                //xprintf("\r\n----- ADDRESS: %x \t SYNC GT: %ld - SYNC cGT: %ld\r\n\r\n", positions.address[0][0], sync.GT[sync.im], calculateGT(sync.LT[sync.im]));
                 break;
             case 'r':   // Reset time sync
+                xprintf("  !!!  Received reset timesync\r\n"); // Red font color
                 resetTimeSync();
                 break;
             case 'f':   // Enable fast sync
@@ -130,25 +161,31 @@ void handleRF(){
                 break;
             case 'c':   // Calibrate
                 mode = MODE_WAIT;
+                LED_mode = LED_CALIBRATING;
                 xprintf("Received 'start calibrate'\r\n");
                 calibrateStartAddress = data_in[1];
                 clearPositionData();
                 sync_init(SYNC_MODE_SLAVE, DMAMUX_SOURCE_PORTD);
                 break;
             case 'w':   // Device registration
-
                 if(data_in[1] == 0){
                     startDeviceTimer(positions.address[0][0]);
                     clearAddresses();
+                    xprintf("Received new device notification\r\n");
                 }else{
-                    xprintf("Received address: %x, from existing device of type %c\r\n", data_in[1], data_in[2]);
+                    if(!registering){
+                        if(data_in[2] == 't')
+                            xprintf("New transmitter joined the network on address 0x%x\r\n", data_in[1]);
+                        else
+                            xprintf("New receiver joined the network on address 0x%x\r\n", data_in[1]);
+                    }
                     addAddress(data_in[1], data_in[2]);
                 }
                 break;
             case 't':   // Request transmit ultrasonic
                 transmit(data_in[1]);
                 break;
-            case 'd':   // Receive measured distance
+            case 'd':   // Received measured distance
                 for(count = 1; count < positions.beaconCount; count++){
                     if(data_in[1] == positions.address[count][0]){
                         positions.r[count] = (data_in[2]<<24) + (data_in[3]<<16) + (data_in[4]<<8) + data_in[5];
@@ -161,6 +198,7 @@ void handleRF(){
                 break;
             case 'e':   // Transmit time from slave
                 ultrasonicTransmitTime = (data_in[1]<<24) + (data_in[2]<<16) + (data_in[3]<<8) + data_in[4];
+                new_transmit_time = 1;
                 break;
             case 'm':   // Receive master mode
                 receiveMaster(data_in);
@@ -170,15 +208,16 @@ void handleRF(){
 }
 
 void dma_ch4_isr(void){ // Fires on done sampling
-    DMA_CINT = 4;
-    set_mux(0,0x00);    // Disable mux
+    pit_run(0);
+    //set_mux(0,0x00);    // Disable mux
     bufferFlag = 1;
+    DMA_CINT = 4;
 }
 
 void registerDevice(){
     // TODO: Transmitter or Receiver? and if receiver, am i first? (master)
     uint8_t data_out[RF_PACKET_SIZE];
-
+    xprintf("\r\nRegistering device on network\r\n");
     clearAddresses();
     nrf24_tx_address(broadCastAddress);
     data_out[0] = 'w';
@@ -201,22 +240,30 @@ void registerDevice(){
 void handleNotification(){
     uint8_t i;
     switch(LED_mode){
-        // TODO: Design LED notifications
+        // TODO: Make LEDs run of timer to make 'living' design patterns
         case LED_CALIBRATING:
+            for(i = 0; i<16;i++)
+                neo_setPixel(i, 0x002000);
             break;
         case LED_NOT_CALIBRATED:
+            for(i = 0; i<16;i++)
+                neo_setPixel(i, 0x200000);
             break;
         case LED_RUNNING:
             break;
         case LED_ERROR:
+            for(i = 0; i<16;i++)
+                neo_setPixel(i, 0x500000);
             break;
         case LED_WAIT:
+            for(i = 0; i<16;i++)
+                neo_setPixel(i, 0x200020);
             break;
         case LED_REGISTERING:
+            for(i = 0; i<16;i++)
+                neo_setPixel(i, 0x000020);
             break;
     }
-    for(i = 0; i<16;i++)
-        neo_setPixel(i, 0x200020);
     neo_show();
 }
 
@@ -226,96 +273,121 @@ int main(){
     SIM_CLKDIV1 |= SIM_CLKDIV1_OUTDIV2(1);
     calibrated = 0;
     LED_mode = LED_NOT_CALIBRATED;
-    mode = MODE_WAIT;
+    //mode = MODE_WAIT;
 
     /* Init the xprintf library */
     xdev_out(usb_serial_putchar);
+    delay(2000);
+    xprintf("\033[2J\033[1;1H");
+    xprintf("\r\n############################################\r\n");
+    xprintf("##                                        ##\r\n");
+    xprintf("##              INITIALIZING              ##\r\n");
+    xprintf("##                                        ##\r\n");
+    xprintf("############################################\r\n\r\n");
 
-    /*ADC_VALS adc;
+
+    ADC_VALS adc;
 
     adc.bufsize = BUFSIZE;
     adc.fs = FS;
     adc.channel = 0x05; // PTC9
-    adc.pause_samples = 1024;
-    adc.CV1 = 868;//771;
-    adc.CV2 = 682;//407;    
-    adc.cycle = 1;
+    adc.CV1 = 560;//868;//771;
+    adc.CV2 = 460;//682;//407;    
+    adc.cycle = 0;
     adc.destination = samples;
 
+    dac_init();
+
     adc_init(&adc);
-*/
+
 
     neo_init(16, displayMemory, drawingMemory);
-    neo_show();
+    handleNotification();
 
     /* Init RF */
-   /* nrf24_init();
+    nrf24_init();
     broadCastAddress[0] = ADD_CHAN;
     broadCastAddress[1] = ADD_CHAN;
     broadCastAddress[2] = ADD_CHAN;
     broadCastAddress[3] = ADD_CHAN;
     broadCastAddress[4] = ADD_CHAN;
     
-   /* nrf24_config(1,RF_PACKET_SIZE);
+    nrf24_config(1,RF_PACKET_SIZE);
     nrf24_rx_address(broadCastAddress);             // Must set rx address once to get bytes 1-4 of the broadcast address due to sharing.
     nrf24_rx_broadcast_address(broadCastAddress);
+    delay(100);
 
     /* Init sync protocol */
-   /* SIM_SCGC5 |= SIM_SCGC5_PORTD;
+    SIM_SCGC5 |= SIM_SCGC5_PORTD;
     PORTD_PCR3 |= PORT_PCR_MUX(1) | PORT_PCR_IRQC(2);
-    sync_init(SYNC_MODE_SLAVE, DMAMUX_SOURCE_PORTD);*/
+    sync_init(SYNC_MODE_SLAVE, DMAMUX_SOURCE_PORTD);
 
-    //registerDevice();
-   // delay(5000);
-    dac_init();
+    registerDevice();
 
     passCount = 0;
-    calibCount = 1;
+    calibCount = 1; 
+    firstPress = 0;
+    bufferFlag = 0;
+    new_transmit_time = 0;
 
-    //gpio_init();
-    uint32_t i = 0;
-         
+    gpio_init();
+
     while(1){
-
-       /* if(receivedRF == 1)
+        if(receivedRF == 1)
             handleRF();    
 
         switch(mode){
             case MODE_CALIBRATE_MASTER:
-                xprintf("MODE_MASTER\r\n");
-               /* if(passCount == 0){
-                    //passCalibrateMaster();   
-                }
-                if(bufferFlag == 1){
-                    bufferFlag = 0;
-                    calculateDistance();
-                    if(passCount == 1){
-                        positions.x[0] = positions.r[passCount];
-                        positions.y[0] = 0;
-                        positions.z[0] = 0;
-                        announcePosition();
-                        passCalibrateMaster();
-                    }else if(passCount == 2){
-                        requestTransmit(calibrateStartAddress);
-                        calculatePosition();
-                        announcePosition();
-                        passCalibrateMaster();
-                    }else if(calibCount-1 < passCount){
-                        requestTransmit(calibCount);
-                    }else{
-                        calculatePosition();
-                        announcePosition();
-                        if(passCount < positions.beaconCount-1)
-                            passCalibrateMaster();
-                    }
+                /*if(passCount == 0){
+                    passCalibrateMaster();   
                 }*/
-                /*break;
-            case MODE_WAIT:
+
+                
+                if(firstPress==1){
+                    firstPress = 0;
+                    LED_mode = LED_CALIBRATING;
+                    requestTransmit(broadCastAddress[0]);
+                }
                 break;
-        }*/
+            case MODE_WAIT:
+                if(in_sync < 3)
+                    LED_mode = LED_WAIT;
+                else
+                    LED_mode = LED_ERROR;
+                break;
+        }
+        if(bufferFlag == 1 && new_transmit_time == 1){
+            new_transmit_time = 0;
+            bufferFlag = 0;
+            /*uint16_t i = 0;
+            for(i = 0; i < BUFSIZE; i+=4){
+                xprintf("%d, %d, %d, %d\r\n",samples[i],samples[i+1],samples[i+2],samples[i+3]);
+            }*/
+            calculateDistance(samples);
+            /*if(passCount == 1){
+                positions.x[0] = positions.r[passCount];
+                positions.y[0] = 0;
+                positions.z[0] = 0;
+                announcePosition();
+                passCalibrateMaster();
+            }else if(passCount == 2){
+                requestTransmit(calibrateStartAddress);
+                calculatePosition();
+                announcePosition();
+                passCalibrateMaster();
+            }else if(calibCount-1 < passCount){
+                requestTransmit(calibCount);
+            }else{
+                calculatePosition();
+                announcePosition();
+                if(passCount < positions.beaconCount-1)
+                    passCalibrateMaster();
+            }*/
+                delay(2000);
+                requestTransmit(broadCastAddress[0]);
+            mode = MODE_WAIT;
+        }
         handleNotification(); 
-        
-        transmit(broadCastAddress[0]);
-        //delay(1000); 
+        delay(100);
     }
 }

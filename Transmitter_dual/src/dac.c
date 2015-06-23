@@ -1,44 +1,36 @@
 #include "dac.h"
 #include "xprintf.h"
 
-#define FS 10000
+#define FS_DAC 512000
 
 void dac_init(){
+    xprintf("Initializing DAC module\t\t - \t");
+
 	dac_load_data();
     spi_setup_master();
-    switch_init();
-    //init_sample_timer(FS, 0);
-    spi_write_uint16(DAC_DAISY_DISABLE, 1);      
-    
+    //switch_init();
+    spi_write_uint16(DAC_DAISY_DISABLE);      
+	init_sample_timer(FS_DAC, PIT_USER_DAC);
+	pit_run(0);
+    spi_dma_init_tx();
+    xprintf("Done\r\n");
+}
 
-
+void dac_enable(){
+	init_sample_timer(FS_DAC, PIT_USER_DAC);
 }
 
 void dac_load_data(){
 	uint16_t i;
 	for(i = 0; i < DAC_BUF_SIZE; i++)
-		dac_signal[i] = (sync_pattern[i] | DAC_UPDATE) | SPI_PUSHR_PCS(0x08) | SPI_PUSHR_CTAS(0) | SPI_PUSHR_EOQ; // PCS3 and end of queue
-	//dac_signal[DAC_BUF_SIZE-1] = sync_pattern[DAC_BUF_SIZE-1] | DAC_UPDATE | SPI_PUSHR_PCS(0x08) | SPI_PUSHR_EOQ | SPI_PUSHR_CTAS(0); // PCS3 and end of queue
-	
+		dac_signal[i] = (sync_pattern[i] | DAC_UPDATE | SPI_PUSHR_PCS(0x08) | SPI_PUSHR_CTAS(0)); // PCS3 and end of queue	
 }
 
 void dac_start(){
-
-	xprintf("DAC started \r\n");
-
-    spi_dma_init_tx(dac_signal);
-	
-	
-
-
-	SPI0_MCR &= ~SPI_MCR_HALT;
-    while( !(SPI0_SR & SPI_SR_EOQF))
-    {}
-    SPI0_SR |=  SPI_SR_EOQF | SPI_SR_TCF ;
-    SPI0_MCR |= SPI_MCR_HALT;
-    //DMA_CERQ = 0;
-	
+    pit_run(1);
 }
+
+
 
 void switch_init(){
 	if ((SIM_SCGC5 & SIM_SCGC5_PORTD) == 0) 

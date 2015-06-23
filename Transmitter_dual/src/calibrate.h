@@ -20,14 +20,16 @@
 #define MODE_CALIBRATE_MASTER 6
 #define MODE_WAIT 7
 
-#define MAX_ADDRESSES 10
+#define MAX_ADDRESSES 4
 
-#define FS 600000
-#define BUFSIZE 1000
+#define FS 512000
+#define F1 39750
+#define F2 40250
+#define BUFSIZE 1024
 
-#define C 0.34029    // mm/us
-#define BEACON_OFFSET 40
-#define ULTRASONIC_TIMEOUT 1
+#define C 0.285    		// mm/us
+#define BEACON_OFFSET 40	// mm
+#define ULTRASONIC_TIMEOUT 2
 
 typedef struct {
     // Index 0 is always self!
@@ -40,8 +42,8 @@ typedef struct {
     uint8_t type[MAX_ADDRESSES];
 } geoInfo;
 
-extern q15_t w1_cs[BUFSIZE*2];
-extern q15_t w2_cs[BUFSIZE*2];
+extern double w1_cs[BUFSIZE*2];
+extern double w2_cs[BUFSIZE*2];
 
 static q15_t samples[BUFSIZE];
 
@@ -52,13 +54,14 @@ geoInfo positions;
 volatile uint8_t mode;
 uint8_t calibCount;
 uint8_t calibrated;
+uint8_t firstPress;
 
 uint32_t ultrasonicTransmitTime;
 
 void startDeviceTimer(uint8_t seconds);
 void startCalibrate();
 void calculatePosition();
-void calculateDistance();
+void calculateDistance(q15_t * adcs);
 void clearPositionData();
 void announcePosition();
 void receivePosition(uint8_t * data);

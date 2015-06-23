@@ -23,6 +23,7 @@
 uint32_t dac_signal[DAC_BUF_SIZE];
 
 void dac_init();
+void dac_enable();
 void dac_load_data();
 void dac_start();
 void switch_init();

@@ -22,8 +22,10 @@ uint8_t payload_len;
 
 /* init the hardware pins */
 void nrf24_init(){
+    xprintf("Initializing RF module\t\t - \t");
     spi_setup_master();
     spi_ce(LOW);
+    xprintf("Done\r\n");
 }
 
 /* configure the module */
@@ -178,15 +180,12 @@ void nrf24_powerDown(){
 /* send and receive multiple bytes over SPI */
 void nrf24_transferSync(uint8_t* dataout, uint8_t* datain, uint8_t len){
     uint8_t i;
-    spi_write_uint8(0x00, 0);
-    spi_write_uint8(0x00, 0);
     for(i=0;i<len;i++){
         if(i < len-1)
             datain[i] = spi_write_uint8(dataout[i], 0);
         else
             datain[i] = spi_write_uint8(dataout[i], 1);
     }
-
 }
 
 /* send multiple bytes over SPI */

@@ -2,6 +2,8 @@
 #include "xprintf.h"
 
 void gpio_init(){
+    xprintf("Initializing GPIO module\t - \t");
+
     if((SIM_SCGC5 & SIM_SCGC5_PORTC) == 0)
 	   SIM_SCGC5 |= SIM_SCGC5_PORTC;
     if((SIM_SCGC5 & SIM_SCGC5_PORTB) == 0)
@@ -19,6 +21,7 @@ void gpio_init(){
     PORTE_PCR0 = PORT_PCR_MUX(1) | PORT_PCR_IRQC(0x0b);    // DIP 2
     PORTC_PCR8 = PORT_PCR_MUX(1) | PORT_PCR_IRQC(0x0b);    // DIP 1
     PORTB_PCR1 = PORT_PCR_MUX(1) | PORT_PCR_IRQC(0x09);    // Calibrate
+    xprintf("Done\r\n");
 }
 void portb_isr(void){
     if(GPIOB_PDIR & 1<<1){
@@ -28,10 +31,10 @@ void portb_isr(void){
     }else{
         delay(400);
         PORTB_PCR18 |= 1<<24;
-        if((GPIOB_PDIR & 1<<18))
+        /*if((GPIOB_PDIR & 1<<18))
             xprintf("Dip 3 changed to HIGH\r\n");
         else
-            xprintf("Dip 3 changed to LOW\r\n");
+            xprintf("Dip 3 changed to LOW\r\n");*/
     }
     
 }
@@ -39,18 +42,18 @@ void portb_isr(void){
 void portc_isr(void){
     delay(200);
     PORTC_PCR8 |= 1<<24;
-    if((GPIOC_PDIR & 1<<8))
+    /*if((GPIOC_PDIR & 1<<8))
         xprintf("Dip 1 changed to HIGH\r\n");
     else
-        xprintf("Dip 1 changed to LOW\r\n");
+        xprintf("Dip 1 changed to LOW\r\n");*/
 }
 
 void porte_isr(void){
     delay(200);
     PORTE_PCR0 |= 1<<24;
-    if((GPIOE_PDIR & 1<<0))
+    /*if((GPIOE_PDIR & 1<<0))
         xprintf("Dip 2 changed to HIGH\r\n");
     else
-        xprintf("Dip 2 changed to LOW\r\n");
+        xprintf("Dip 2 changed to LOW\r\n");*/  
     
 }

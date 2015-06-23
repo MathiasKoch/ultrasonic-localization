@@ -1,0 +1,62 @@
+
+n = 20;
+
+fid = fopen('30');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,1) = in2(1:n)-300;
+
+fid = fopen('40');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,2) = in2(1:n)-400;
+
+fid = fopen('50');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,3) = in2(1:n)-500;
+
+fid = fopen('60');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,4) = in2(1:n)-600;
+
+fid = fopen('70');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,5) = in2(1:n)-700;
+
+fid = fopen('80');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,6) = in2(1:n)-800;
+
+fid = fopen('90');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,7) = in2(1:n)-900;
+
+fid = fopen('100');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,8) = in2(1:n)-1000;
+
+fid = fopen('110');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,9) = in2(1:n)-1100;
+
+fid = fopen('120');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,10) = in2(1:n)-1200;
+
+fid = fopen('130');
+[in2, count] = fscanf(fid,'%d,', 2048);
+fclose(fid);
+data(:,11) = in2(1:n)-1300;
+
+data = data + 10;
+
+figure()
+boxplot(data,'Labels',{'30 cm', '40 cm', '50 cm', '60 cm', '70 cm', '80 cm', '90 cm', '100 cm', '110 cm', '120 cm', '130 cm'})

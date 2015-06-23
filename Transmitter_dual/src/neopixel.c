@@ -22,6 +22,7 @@
 */
 
 #include "neopixel.h"
+#include "xprintf.h"
 
 
 uint16_t neo_stripLen;
@@ -53,6 +54,8 @@ uint32_t neo_micros(){
 
 void neo_init(uint32_t numPerStrip, void *frameBuf, void *drawBuf)
 {
+    xprintf("Initializing Neopixel module\t - \t");
+
 	neo_stripLen = numPerStrip;
 	neo_frameBuffer = frameBuf;
 	neo_drawBuffer = drawBuf;
@@ -161,6 +164,8 @@ void neo_init(uint32_t numPerStrip, void *frameBuf, void *drawBuf)
 
     // Enable interrupt request
     NVIC_ENABLE_IRQ(IRQ_DMA_CH3);
+    xprintf("Done\r\n");
+
 }
 
 void dma_ch3_isr(void){
@@ -198,7 +203,7 @@ void neo_show(void)
 	// without any prior 3 x 800kHz DMA requests pending
 	sc = FTM1_SC;
 	cv = FTM1_C1V;
-	NVIC_DISABLE_IRQ(IRQ_DMA_CH3);																			
+	__disable_irq();																		
 	// CAUTION: this code is timing critical.  Any editing should be
 	// tested by verifying the oscilloscope trigger pulse at the end
 	// always occurs while both waveforms are still low.  Simply
@@ -222,7 +227,7 @@ void neo_show(void)
 	DMA_SERQ = 0x03;
 	FTM1_SC = sc;		// restart FTM1 timer
 	//digitalWriteFast(1, LOW);
-	NVIC_ENABLE_IRQ(IRQ_DMA_CH3);																				
+	__enable_irq();																			
 }
 
 void neo_setPixel(uint32_t num, int color)

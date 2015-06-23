@@ -107,7 +107,6 @@ void handleRF(){
     uint8_t data_in[RF_PACKET_SIZE];
     receivedRF = 0;
     uint8_t count;
-
     if(nrf24_dataReady()){
         nrf24_getData(data_in);
         switch(data_in[0]){
@@ -254,7 +253,7 @@ int main(){
     PORTB_PCR0 |= PORT_PCR_MUX(1) | PORT_PCR_IRQC(2);
     //sync_init(SYNC_MODE_MASTER, DMAMUX_SOURCE_PORTB);
 
-    //registerDevice();
+    registerDevice();
 
     passCount = 0;
     calibCount = 1;
@@ -266,7 +265,7 @@ int main(){
         if(receivedRF == 1)
             handleRF();    
 
-        switch(mode){
+        /*switch(mode){
             case MODE_CALIBRATE_MASTER:
                 xprintf("MODE_MASTER\r\n");
                /* if(passCount == 0){
@@ -295,7 +294,7 @@ int main(){
                             passCalibrateMaster();
                     }
                 }*/
-                break;
+       /*         break;
             case MODE_WAIT:
                 break;
             default:
@@ -311,7 +310,8 @@ int main(){
 
         //xprintf("\r\n----- ADDRESS: %x \t SYNC GT: %ld\r\n\r\n", positions.address[0][0], sync.GTm);
 
-        //handleNotification();        
-        delay(1000);
+        //handleNotification();   */   
+
+        delay(10);
     }
 }

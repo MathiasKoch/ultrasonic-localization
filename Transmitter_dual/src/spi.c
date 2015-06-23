@@ -1,39 +1,53 @@
 #include "spi.h"
+#include "dac.h"
+#include "adc.h"
 #include "xprintf.h"
+
 
 unsigned int spi_is_running(void){
   return SPI0_SR & SPI_SR_TXRXS;
 }
 
-void spi_dma_init_tx(uint32_t * sourceAdd){
+void spi_dma_init_tx(){
   SIM_SCGC7 |= SIM_SCGC7_DMA;
   SIM_SCGC6 |= SIM_SCGC6_DMAMUX;
 
-  DMA_CR = 0;
 
-  DMA_SERQ = 0;
-
-  DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
-  DMAMUX0_CHCFG0 = DMAMUX_SOURCE_SPI0_TX | DMAMUX_ENABLE;
-
-  DMA_TCD0_SADDR = sourceAdd;  /* Set the Source Address */
+  DMA_TCD0_SADDR = dac_signal;  /* Set the Source Address */
     /* Destination address */
   DMA_TCD0_DADDR = &SPI0_PUSHR;
   DMA_TCD0_SOFF = 0x04;
+
+  DMA_SERQ = 0x00;
     /* Source and Destination Modulo off, source and destination size 2 = 32 bits */
   DMA_TCD0_ATTR = DMA_TCD_ATTR_SSIZE(2) | DMA_TCD_ATTR_DSIZE(2);  
-    /* Transfer 2 bytes per transaction */
+    /* Transfer 4 bytes per transaction */
   DMA_TCD0_NBYTES_MLNO = 0x04;
     /* No adjust needed */
-  DMA_TCD0_SLAST = 0;
+  DMA_TCD0_SLAST = -sizeof(dac_signal);
     /* Destination offset disabled */
-  DMA_TCD0_DOFF = 0;
-  DMA_TCD0_CITER_ELINKNO = 2048;
-  DMA_TCD0_BITER_ELINKNO = 2048;
+  DMA_TCD0_DOFF = 0x00;
+  DMA_TCD0_CITER_ELINKNO = DAC_BUF_SIZE;
+  DMA_TCD0_BITER_ELINKNO = DAC_BUF_SIZE;
     /* No adjustment to destination address */
   DMA_TCD0_DLASTSGA = 0x00;
 
   DMA_TCD0_CSR = DMA_TCD_CSR_DREQ;
+
+  DMA_TCD0_CSR |= DMA_TCD_CSR_INTMAJOR;
+
+  NVIC_ENABLE_IRQ(IRQ_DMA_CH0);
+
+  DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
+  DMAMUX0_CHCFG0 = DMAMUX_SOURCE_ALWAYS0 |  DMAMUX_ENABLE;
+
+}
+
+void dma_ch0_isr(void){
+  if(_user == PIT_USER_DAC){
+    pit_run(0);
+  }
+  DMA_CINT = 0;
 }
 
 void spi_setup_master(void){
@@ -62,51 +76,18 @@ void spi_setup_master(void){
   PORTD_PCR2 = PORT_PCR_MUX(2) | PORT_PCR_SRE | PORT_PCR_DSE; // DAC
   /* PTC7, SPI0_SIN, ALT2 */
   PORTC_PCR7 = PORT_PCR_MUX(2) | PORT_PCR_PE; // nRF24
+  
+  SPI0_MCR = SPI_MCR_HALT;
 
-  /* SPI0_MCR, module configuration register */
-  /* MSTR: enable master */
-  /* CONT_SCKE: continuous SCK disabled */
-  /* DCONF: SPI mode */
-  /* FRZ: freeze disabled */
-  /* MTFE: modified SPI transfer format disabled */
-  /* ROOE: ignore incoming data on overflow */
-  /* PCSIS: active low */
-  /* DOZE: disabled */
-  /* MDIS: DSPI clocks disabled */
-  /* DIS_TXF: transmit fifo disabled */
-  /* DIS_RXF: receive fifo disabled */
+  SPI0_MCR |= SPI_MCR_MSTR | SPI_MCR_DIS_TXF | SPI_MCR_DIS_RXF | SPI_MCR_PCSIS(0x01) | SPI_MCR_PCSIS(0x08);
 
-  /* disable MDIS first to disable FIFOs */
-  SPI0_MCR = SPI_MCR_MDIS;
-
-  SPI0_MCR = SPI_MCR_MSTR | SPI_MCR_MDIS | SPI_MCR_DIS_RXF | SPI_MCR_PCSIS(0x01) | SPI_MCR_PCSIS(0x08) | SPI_MCR_HALT;
-  while (spi_is_running());
-
-  /* SPI0_CTAR0, clock and transfer attributes register */
-  /* DBR: double baud rate, 50 / 50 */
-  /* FMSZ: frame size set to 7 + 1 */
-  /* CPOL: inactive when sck low */
-  /* CPHA: data sampled on leading edge */
-  /* LSBFE: MSB first */
-  /* PCSSCK: PCS activation prescaler set to 1 */
-  /* PASC: PCS deactivation prescaler set to 1 */
-  /* PDT: delay after transfer prescaler set to 1 */
-  /* PBR: baud rate prescaler set to 1 */
-  /* CSSCK: PCS to SCK delay scaler set to 2 */
-  /* ASC: after delay scaler set to 0 */
-  /* DT: delay after transfer scaler set to 0 */
-  /* BR: baud rate scaler set to 128 (ie. 375kHz) */
   SPI0_CTAR1 = SPI_CTAR_FMSZ(7) | SPI_CTAR_PBR(0) | SPI_CTAR_BR(4) | SPI_CTAR_ASC(3); // 1.5 MHz clk
   SPI0_CTAR0 = SPI_CTAR_FMSZ(0xF) | SPI_CTAR_PBR(0) | SPI_CTAR_BR(0) | SPI_CTAR_ASC(0) | SPI_CTAR_CPHA; // 12 MHz clk
-  //SPI0_CTAR0 = SPI_CTAR_FMSZ(7) | SPI_CTAR_PBR(0) | SPI_CTAR_BR(0) | SPI_CTAR_ASC(0) | SPI_CTAR_CPHA; // 12 MHz clk
 
-  /* SPI0_RSER, DMA and interrupt request select and enable register */
-  /* all disabled */
-  SPI0_RSER = SPI_RSER_TFFF_RE | SPI_RSER_TFFF_DIRS;
-
+  SPI0_RSER = 0;
 
   /* enable DSPI clocks */
-  SPI0_MCR &= ~SPI_MCR_MDIS;
+  SPI0_MCR &= ~SPI_MCR_HALT;
 }
 
 uint8_t spi_write_uint8(uint8_t x, uint8_t eoq){
@@ -117,44 +98,18 @@ uint8_t spi_write_uint8(uint8_t x, uint8_t eoq){
   /* CTCNT: do not clear counter */
   /* PCS: select cs0 (not applicable if hand controlled) */
   /* TXDATA: data */
-  if(eoq == 1 || ((SPI0_SR >> 12) & 7) == 2){
-    if(eoq == 1)
-      SPI0_PUSHR = (x | SPI_PUSHR_PCS(0x01) | SPI_PUSHR_EOQ | SPI_PUSHR_CTAS(1));
-    else
-      SPI0_PUSHR = (x | SPI_PUSHR_PCS(0x01) | SPI_PUSHR_EOQ | SPI_PUSHR_CONT | SPI_PUSHR_CTAS(1));
-
-    SPI0_MCR &= ~SPI_MCR_HALT;
-    while( !(SPI0_SR & SPI_SR_EOQF))
-    {}
-    SPI0_SR |=  SPI_SR_EOQF | SPI_SR_TCF ;
-    SPI0_MCR |= SPI_MCR_HALT;
-
-  }else{
+  if(eoq == 1)
+    SPI0_PUSHR = (x | SPI_PUSHR_PCS(0x01) | SPI_PUSHR_CTAS(1));
+  else
     SPI0_PUSHR = (x | SPI_PUSHR_PCS(0x01) | SPI_PUSHR_CONT | SPI_PUSHR_CTAS(1));
-  }
+  while (((SPI0_SR >> 4) & 7) == 0);
   return SPI0_POPR;
 }
 
-uint16_t spi_write_uint16(uint16_t x, uint8_t eoq){
-  /* SPI0_PUSHR */
-  /* CONT: PCS to inactive between transfers */
-  /* CTAR: TAR0 selected */
-  /* EOQ: last data */
-  /* CTCNT: do not clear counter */
-  /* PCS: select cs0 (not applicable if hand controlled) */
-  /* TXDATA: data */
-  if(eoq == 1 || ((SPI0_SR >> 12) & 7) == 2){
-    if(eoq == 1)
-      SPI0_PUSHR = (x | SPI_PUSHR_PCS(0x08) | SPI_PUSHR_EOQ | SPI_PUSHR_CTAS(0));
-    else
-      SPI0_PUSHR = (x | SPI_PUSHR_PCS(0x08) | SPI_PUSHR_EOQ | SPI_PUSHR_CONT | SPI_PUSHR_CTAS(0));
-
-    SPI0_MCR &= ~SPI_MCR_HALT;
-
-  }else{
-    SPI0_PUSHR = (x | SPI_PUSHR_PCS(0x08) | SPI_PUSHR_CONT | SPI_PUSHR_CTAS(0));
-  }
-  return SPI0_POPR;
+void spi_write_uint16(uint16_t x){
+    SPI0_PUSHR = (x | SPI_PUSHR_PCS(0x08) | SPI_PUSHR_CTAS(0));
+    while (((SPI0_SR >> 4) & 7) == 0);
+    SPI0_POPR;
 }
 
 

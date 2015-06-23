@@ -9,14 +9,15 @@
 #define TEN 0x1
 #define CHN (1<<2)
 
+#define PIT_USER_ADC 0
+#define PIT_USER_DAC 1
+
 typedef struct {
    	uint16_t CV1, CV2;
    	uint32_t fs;
    	volatile uint16_t cnt;
    	uint16_t bufsize;
    	uint16_t channel;
-   	uint16_t pause_samples;
-   	uint16_t thresh;
    	volatile uint8_t cycle;
    	volatile uint8_t cycleCount;
    	q15_t * destination;
@@ -24,6 +25,7 @@ typedef struct {
 } ADC_VALS;  
 
 volatile uint32_t sampleStartGT;
+uint8_t _user;
 
 void dma_init();
 int adc_calibrate(void);
@@ -33,5 +35,6 @@ void adc_run(uint8_t enable, uint8_t cycle);
 void adc_set_compare(uint16_t c1, uint16_t c2);
 void set_mux(uint8_t enable, uint8_t n);
 void mux_init(void);
+void pit_run(uint8_t enable);
 
 #endif

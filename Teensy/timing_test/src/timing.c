@@ -28,41 +28,41 @@ void dmaInit() {
     DMA_CR = 0;
 
     // Source address
-    DMA_TCD0_SADDR = &ADC0_RA;
+    DMA_TCD4_SADDR = &ADC1_RA;
     // Don't change source address
-    DMA_TCD0_SOFF = 0;
-    DMA_TCD0_SLAST = 0;
+    DMA_TCD4_SOFF = 0;
+    DMA_TCD4_SLAST = 0;
     // Destination address
-    DMA_TCD0_DADDR = samples;
+    DMA_TCD4_DADDR = samples;
     // Destination offset (2 byte)
-    DMA_TCD0_DOFF = 2;
+    DMA_TCD4_DOFF = 2;
     // Restore destination address after major loop
-    DMA_TCD0_DLASTSGA = -sizeof(samples);
+    DMA_TCD4_DLASTSGA = -sizeof(samples);
     // Source and destination size 16 bit
-    DMA_TCD0_ATTR = DMA_TCD_ATTR_SSIZE(1) | DMA_TCD_ATTR_DSIZE(1);
+    DMA_TCD4_ATTR = DMA_TCD_ATTR_SSIZE(1) | DMA_TCD_ATTR_DSIZE(1);
     // Number of bytes to transfer (in each service request)
-    DMA_TCD0_NBYTES_MLNO = 2;
+    DMA_TCD4_NBYTES_MLNO = 2;
     // Set loop counts
-    DMA_TCD0_CITER_ELINKNO = sizeof(samples) / 2;
-    DMA_TCD0_BITER_ELINKNO = sizeof(samples) / 2;
+    DMA_TCD4_CITER_ELINKNO = sizeof(samples) / 2;
+    DMA_TCD4_BITER_ELINKNO = sizeof(samples) / 2;
     // Enable interrupt (end-of-major loop)
-    DMA_TCD0_CSR = DMA_TCD_CSR_INTMAJOR;
+    DMA_TCD4_CSR = DMA_TCD_CSR_INTMAJOR;
 
     // Set ADC as source (CH 0), enable DMA MUX
-    DMAMUX0_CHCFG0 = DMAMUX_DISABLE;
-    DMAMUX0_CHCFG0 = DMAMUX_SOURCE_ADC0 | DMAMUX_ENABLE;
+    DMAMUX0_CHCFG4 = DMAMUX_DISABLE;
+    DMAMUX0_CHCFG4 = DMAMUX_SOURCE_ADC1 | DMAMUX_ENABLE;
 
     // Enable request input signal for channel 0
-    DMA_SERQ = 0;
+    DMA_SERQ = 4;
 
 
     // Enable interrupt request
-    NVIC_ENABLE_IRQ(IRQ_DMA_CH0);
+    NVIC_ENABLE_IRQ(IRQ_DMA_CH4);
 }
 
 
 
-void dma_ch0_isr(void) {
+void dma_ch4_isr(void) {
     // Clear interrupt request for channel 1
     /*if(bufferFlag == 0){
         DMA_TCD0_DADDR = samples2;
@@ -73,8 +73,9 @@ void dma_ch0_isr(void) {
         DMA_TCD0_DLASTSGA = -sizeof(samples);
         bufferFlag = 0;
     }*/
+        xprintf("here\r\n");
 
-    DMA_CINT = 0;
+    DMA_CINT = 4;
 }
 
 
