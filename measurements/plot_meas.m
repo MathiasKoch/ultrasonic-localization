@@ -57,6 +57,32 @@ fclose(fid);
 data(:,11) = in2(1:n)-1300;
 
 data = data + 10;
+data = data .* 0.1;
 
 figure()
 boxplot(data,'Labels',{'30 cm', '40 cm', '50 cm', '60 cm', '70 cm', '80 cm', '90 cm', '100 cm', '110 cm', '120 cm', '130 cm'})
+grid on
+ylim([-6 6])
+ylabel('Error [cm]')
+xlabel('Distance')
+title('Error in ultrasonic measurements')
+tit = get(gca,'Title');
+set(tit,'Position',get(tit,'Position') .* [1 1.03 1])
+
+set(tit, 'FontSize', 16)
+yh = get(gca,'YLabel'); % Handle of the x label
+
+set(yh,'Position',get(yh,'Position') .* [0.05 1 1])
+
+set(yh, 'FontSize', 14)
+set(yh, 'Units', 'Normalized')
+
+xh = get(gca,'XLabel');
+set(xh,'Position',get(xh,'Position') .* [1 2 1])
+set(xh, 'FontSize', 14)
+set(gca,'FontSize',12)
+
+
+
+set(gcf,'paperunits','centimeters','Paperposition',[0 0 30 10]);
+saveas(gcf,'Measurements.eps','psc2')

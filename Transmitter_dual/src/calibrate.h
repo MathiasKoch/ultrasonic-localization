@@ -19,6 +19,7 @@
 #define MODE_SAMPLE_270 5
 #define MODE_CALIBRATE_MASTER 6
 #define MODE_WAIT 7
+#define MODE_CALIBRATE 8
 
 #define MAX_ADDRESSES 4
 
@@ -27,9 +28,13 @@
 #define F2 40250
 #define BUFSIZE 1024
 
-#define C 0.285    		// mm/us
-#define BEACON_OFFSET 40	// mm
-#define ULTRASONIC_TIMEOUT 2
+#define CALIBRATE_AVG_NUMBER 10
+
+#define TEMP 24
+
+
+#define BEACON_OFFSET 165	// mm
+#define ULTRASONIC_TIMEOUT 4
 
 typedef struct {
     // Index 0 is always self!
@@ -47,6 +52,8 @@ extern double w2_cs[BUFSIZE*2];
 
 static q15_t samples[BUFSIZE];
 
+
+
 uint8_t passCount;
 uint8_t calibrateStartAddress;
 uint8_t lastMasterAddress;
@@ -55,6 +62,9 @@ volatile uint8_t mode;
 uint8_t calibCount;
 uint8_t calibrated;
 uint8_t firstPress;
+uint8_t calib_transmit_flag;
+uint8_t last_request;
+uint8_t calibrate_avg;
 
 uint32_t ultrasonicTransmitTime;
 

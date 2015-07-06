@@ -50,10 +50,11 @@
 #define RX_PW_P5    0x16
 #define FIFO_STATUS 0x17
 #define DYNPD       0x1C
+#define FEATURE     0x1D
 
 /* Bit Mnemonics */
 
-/* configuratio nregister */
+/* configuration register */
 #define MASK_RX_DR  6
 #define MASK_TX_DS  5
 #define MASK_MAX_RT 4
@@ -128,3 +129,8 @@
 #define ACTIVATE      0x50 
 #define R_RX_PL_WID   0x60
 #define NOP           0xFF
+
+#define W_TX_PAYLOAD_NO_ACK  0xB0
+#define EN_DPL      2
+#define EN_ACK_PAY  1
+#define EN_DYN_ACK  0

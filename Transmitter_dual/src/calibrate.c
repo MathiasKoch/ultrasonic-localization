@@ -1,5 +1,6 @@
 #include "calibrate.h"
 #include "xprintf.h"
+#include <stdio.h>
 
 void startDeviceTimer(uint8_t seconds){
     if((SIM_SCGC5 & SIM_SCGC5_LPTIMER) == 0)
@@ -26,51 +27,63 @@ void receiveMaster(uint8_t * data){
     passCount = data[2];
     lastMasterAddress = data[1];
     calibCount = 1;
+    xprintf("Received MASTER\r\n");
     mode = MODE_CALIBRATE_MASTER;
     sync_init(SYNC_MODE_MASTER, DMAMUX_SOURCE_PORTD);
     enableFastSync();
-    delay(2500);
-    if(passCount < 3)
-        requestTransmit(lastMasterAddress);
-    else
-        requestTransmit(calibCount);
+    calib_transmit_flag = 1;
+    last_request = 0;
 }
 
 void passCalibrateMaster(){
     uint8_t data_out[RF_PACKET_SIZE];
-    mode = MODE_WAIT;
-    adc_run(0,1);
-    sync_init(SYNC_MODE_SLAVE, DMAMUX_SOURCE_PORTD); // Enter slave mode
-    nrf24_tx_address(positions.address[100]);// TODO: Find the next master?
     data_out[0] = 'm';
     data_out[1] = positions.address[0][0];
     data_out[2] = ++passCount;
-    nrf24_send(data_out);
-    while(nrf24_isSending());
-    nrf24_powerUpRx();
+    nrf24_send(data_out, positions.address[passCount%(positions.beaconCount+1)]);
+    uint8_t temp = nrf24_lastMessageStatus();
+    if(temp == NRF24_MESSAGE_LOST){
+        xprintf("MESSAGE LOST!!!!!\r\n");
+    }else if(temp == NRF24_TRANSMISSION_OK){
+        uint8_t cnt = nrf24_retransmissionCount();
+        xprintf("Successfully passed master with %d retries\r\n", cnt);
+    }
+    xprintf("Passing master to device address: 0x%x\r\n", positions.address[passCount%(positions.beaconCount + 1)][0]);
+    sync_init(SYNC_MODE_SLAVE, DMAMUX_SOURCE_PORTD); // Enter slave mode
+    mode = MODE_WAIT;
 }
 
 void requestTransmit(uint8_t addressNumber){
     calibCount++;
-    uint8_t data_out[RF_PACKET_SIZE];
-    //if(addressNumber < positions.beaconCount){
+    uint8_t count;
+    for(count = 0; count < positions.beaconCount; count++){
+        if(addressNumber == positions.address[count][0]){
+            break;
+        }
+    }
+    if(count == 0){
+        xprintf("No other beacons on the network!\r\n");
+    }else{
+        if(last_request != count){
+            calibrate_avg = 0;
+            positions.r[passCount] = 0;
+        }
+        last_request = count;
+        uint8_t data_out[RF_PACKET_SIZE];
+        xprintf("Requesting transmit from device address 0x%x\r\n",positions.address[count][0]);
         adc_run(1,0);
-        delay(10);
+        //delay(1);
         mode = MODE_CALIBRATE_MASTER;
-        //nrf24_tx_address(positions.address[addressNumber]);
-        nrf24_tx_address(broadCastAddress);
-        data_out[0] = 't';
+        data_out[0] = 'u';
         data_out[1] = positions.address[0][0];
-        nrf24_send(data_out);        
-        while(nrf24_isSending());
-        nrf24_powerUpRx();      
+        nrf24_send(data_out, positions.address[count]);        
+              
         startDeviceTimer(ULTRASONIC_TIMEOUT);
-    //}
+    }
 }
 
 void announcePosition(){
     uint8_t data_out[RF_PACKET_SIZE];
-    nrf24_tx_address(broadCastAddress);    
     data_out[0] = 'p';
     data_out[1] = positions.address[0][0];
     data_out[2] = (positions.x[0]>>24)&0xFF;
@@ -85,40 +98,40 @@ void announcePosition(){
     data_out[11] = (positions.z[0]>>16)&0xFF;
     data_out[12] = (positions.z[0]>>8)&0xFF;
     data_out[13] = positions.z[0]&0xFF;
-    nrf24_send(data_out);        
-    while(nrf24_isSending());
-    nrf24_powerUpRx();
+    nrf24_broadcast(data_out);        
     calibrated = 1;    
 }
 
 void receivePosition(uint8_t * data){
     uint8_t count;
-    for(count = 1; count < positions.beaconCount; count++){
+    for(count = 0; count < positions.beaconCount; count++){
         if(data[1] == positions.address[count][0])
             break;
     }
-    positions.x[count] = (data[2]<<24) + (data[3]<<16) + (data[4]<<8) + data[5];
-    positions.y[count] = (data[6]<<24) + (data[7]<<16) + (data[8]<<8) + data[9];
-    positions.z[count] = (data[10]<<24) + (data[11]<<16) + (data[12]<<8) + data[13];
+    if(count == 0){
+        xprintf("No other beacons on the network! - Received position data of myself?? \r\n");
+    }else{
+        positions.x[count] = (data[2]<<24) + (data[3]<<16) + (data[4]<<8) + data[5];
+        positions.y[count] = (data[6]<<24) + (data[7]<<16) + (data[8]<<8) + data[9];
+        positions.z[count] = (data[10]<<24) + (data[11]<<16) + (data[12]<<8) + data[13];
+    }
 }
 
 void startCalibrate(){
     if(mode != MODE_CALIBRATE_MASTER){
-        mode = MODE_CALIBRATE_MASTER;
-        //xprintf("Starting calibration sequence\r\n");
-        firstPress = 1;    
-
-        /*uint8_t data_out[RF_PACKET_SIZE];
-        calibCount = 1;
         passCount = 0;
-        nrf24_tx_address(broadCastAddress);
+        calibCount = 1;
+        last_request = 0;
+        //firstPress = 1;    
+
+        uint8_t data_out[RF_PACKET_SIZE];
         data_out[0] = 'c';
         data_out[1] = positions.address[0][0];
-        nrf24_send(data_out);        
-        while(nrf24_isSending()){};
-        nrf24_powerUpRx();*/
-        //clearPositionData();
-        //announcePosition();
+        nrf24_broadcast(data_out);        
+        clearPositionData();
+        announcePosition();
+
+        mode = MODE_CALIBRATE_MASTER;
     }else{
         xprintf("Already calibrating dude, CHILL!\r\n");
 
@@ -128,24 +141,24 @@ void startCalibrate(){
 
 void calculatePosition(){
     if(passCount == 2){
-        uint32_t dx = positions.x[calibrateStartAddress] - positions.x[lastMasterAddress];
-        uint32_t dy = positions.y[calibrateStartAddress] - positions.y[lastMasterAddress];
-        uint32_t d = isqrt32(dx * dx + dy * dy);
+        positions.r[1] = positions.r[1]/CALIBRATE_AVG_NUMBER;
+        positions.r[2] = positions.r[2]/CALIBRATE_AVG_NUMBER;
+        double dx = (double)((int)positions.x[calibrateStartAddress] - (int)positions.x[lastMasterAddress]);
+        double dy = (double)((int)positions.y[calibrateStartAddress] - (int)positions.y[lastMasterAddress]);
+        double d = sqrt(dx * dx + dy * dy);
+        
+        double a = ((double)((int)positions.r[1] * (int)positions.r[1] - (int)positions.r[2] * (int)positions.r[2]) + d * d) / (2 * d);
+        double h = sqrt((double)((int)positions.r[1] * (int)positions.r[1]) - a * a);
 
-        uint32_t a = (positions.r[1] * positions.r[1] - positions.r[2] * positions.r[2] + d * d) / (2 * d);
-        uint32_t h = isqrt32(positions.r[1] * positions.r[1] - a * a);
+        double cx2 = (int)positions.x[lastMasterAddress] + a * dx / d;
+        double cy2 = (int)positions.y[lastMasterAddress] + a * dy / d;
 
-        uint32_t cx2 = positions.x[lastMasterAddress] + a * (positions.x[calibrateStartAddress] - positions.x[lastMasterAddress]) / d;
-        uint32_t cy2 = positions.y[lastMasterAddress] + a * (positions.y[calibrateStartAddress] - positions.y[lastMasterAddress]) / d;
-
-        positions.x[0] = (cx2 + h * (positions.y[calibrateStartAddress] - positions.y[lastMasterAddress]) / d);
-        positions.y[0] = (cy2 - h * (positions.x[calibrateStartAddress] - positions.x[lastMasterAddress]) / d);
-        // TODO: Select the right +- value
-        /*
-        x2 = (cx2 - h * (positions.y[calibrateStartAddress] - positions.y[lastMasterAddress]) / d);
-        y2 = (cy2 + h * (positions.x[calibrateStartAddress] - positions.x[lastMasterAddress]) / d);
-*/
-
+        positions.x[0] = (uint32_t)round(cx2 + h * dy / d);
+        positions.y[0] = (uint32_t)round(cy2 - h * dx / d);
+        /* TODO: Select the right +- value
+            positions.x[0] = (cx2 + h * (positions.y[calibrateStartAddress] - positions.y[lastMasterAddress]) / d);
+            positions.y[0] = (cy2 - h * (positions.x[calibrateStartAddress] - positions.x[lastMasterAddress]) / d);
+         */
     }else{
         // TODO: Find 3 shortest distances and multilaterate from them
     }
@@ -162,29 +175,33 @@ void calculatePosition(){
  *      w1_cs, w2_cs            -   Phasor of frequency 39750 Hz and 40250 Hz, created in MATLAB (extern from phasors.c)
  *      sampleStartGT           -   Timestamp of samling window start, in global time (Saved in adc.c ISR)
  *      ultrasonicTransmitTime  -   Timestamp of ultrasonic transmission on transmitter side, in global time (Received on RF in main.c)
- *      FS                      -   Samplerate of adcs signal on receiver side, in Hz (600000 Hz) (Defined in calibrate.h)
+ *      FS                      -   Samplerate of adcs signal on receiver side, in Hz (512000 Hz) (Defined in calibrate.h)
  */
 void calculateDistance(q15_t * adcs){
-    float adc_f[BUFSIZE];
+    double C_M = (331.5 + (0.6 * TEMP)) * 1e-3;
+    float32_t adc_f[BUFSIZE];
+    float32_t mean;
     double adc_d[BUFSIZE];
     double phase1, phase2, t_e;
-    //arm_shift_q15(adcs, 5, adcs, BUFSIZE);
+    uint16_t count;
+
+    arm_shift_q15(adcs, 5, adcs, BUFSIZE);
     arm_q15_to_float(adcs, adc_f, BUFSIZE);
-    //arm_mean_q15(adcs, BUFSIZE, &mean);
-    memcpy(adc_d, adc_f, sizeof(double));
+    arm_mean_f32(adc_f, BUFSIZE, &mean);
+    for(count = 0; count < BUFSIZE; count++){
+        adc_d[count] = (double)(adc_f[count] - mean);
+    }
     phase1 = dot_product_atan2(w1_cs, adc_d, BUFSIZE);        
     phase2 = dot_product_atan2(w2_cs, adc_d, BUFSIZE); 
     t_e = ((phase1 - phase2) / (2 * M_PI * (F1 - F2)));
 
-    // 1000000 to make s to us conversion.
-    // add (1/FS * 10^-6 * BUFSIZE/2), to get the window center time.
+    // 1e6 to make s to us conversion.
+    // add (1/FS * 1e6 * BUFSIZE/2), to get the window center time.
     // (MAX_US - sampleStartGT), to compensate for timer counting downwards.
-    //uint32_t sampleStartGT2 = calculateGT((MAX_US - sampleStartGT) + (uint32_t)(((double)1/(double)FS) * 1000000 * index));
-    uint32_t sampleStartGT2 = calculateGT((MAX_US - sampleStartGT) + (uint32_t)(( (((double)1/(double)FS) * BUFSIZE/2) + t_e) * 10e6));
-    //uint32_t sampleStartGT2 = calculateGT((MAX_US - sampleStartGT));
+    uint32_t epochReceivedTime = calculateGT((MAX_US - sampleStartGT) + (uint32_t)(( (((double)1/(double)FS) * BUFSIZE/2) + t_e) * 1e6));
 
-    positions.r[passCount] = (uint32_t)((double)(sampleStartGT2 - ultrasonicTransmitTime) * (double)C);   
-    //xprintf("Transmit time: %d\t Window start time: %d\r\n",ultrasonicTransmitTime, (MAX_US - sampleStartGT));
-    //xprintf("Epoch time: %d\t Epoch add val: %d\r\n", sampleStartGT2, (uint32_t)(((double)1.0/(double)FS) * 1000000 * index)); 
-    xprintf("%d\r\n", positions.r[passCount]);
+    positions.r[passCount] += (uint32_t)((double)(epochReceivedTime - ultrasonicTransmitTime) * C_M) - BEACON_OFFSET;   
+    calibrate_avg++;
+    xprintf("Distance measured: %d\r\n",(uint32_t)((double)(epochReceivedTime - ultrasonicTransmitTime) * C_M) - BEACON_OFFSET);
+
 }

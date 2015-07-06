@@ -44,8 +44,11 @@ void nrf24_config(uint8_t channel, uint8_t pay_length){
     nrf24_configRegister(RX_PW_P4, 0x00); // Pipe not used 
     nrf24_configRegister(RX_PW_P5, 0x00); // Pipe not used 
 
-    // 1 Mbps, TX gain: 0dbm
-    nrf24_configRegister(RF_SETUP, (0<<RF_DR)|((0x03)<<RF_PWR));
+    //nrf24_configRegister(ACTIVATE, 0x73);
+    nrf24_configRegister(FEATURE, (1<<EN_DYN_ACK));
+
+    // 2 Mbps, TX gain: 0dbm
+    nrf24_configRegister(RF_SETUP, (1<<RF_DR)|(0x03<<RF_PWR));
 
     // CRC enable, 1 byte CRC length
     nrf24_configRegister(CONFIG,nrf24_CONFIG);
@@ -128,16 +131,79 @@ uint8_t nrf24_retransmissionCount(void){
 
 // Sends a data package to the default address. Be sure to send the correct
 // amount of bytes as configured as payload on the receiver.
-void nrf24_send(uint8_t* value){    
-    spi_ce(LOW);
-    nrf24_powerUpTx();
-    /* Do we really need to flush TX fifo each time ? */
-    #if 1
+void nrf24_send(uint8_t* value, uint8_t * adr){
+    if(radioBusy == 1){
+        uint8_t count;
+        for(count = 0; count < RF_PACKET_SIZE; count++){
+            queue[queue_count][count] = value[count];
+            if(count < 5){
+               queue_adr[queue_count][count] = adr[count]; 
+            }
+        }
+        queue_count++;
+    }else{
+        radioBusy = 1;
+        nrf24_tx_address(adr); 
+        spi_ce(LOW);
+        nrf24_powerUpTx();
+        /* Do we really need to flush TX fifo each time ? */
         spi_write_uint8(FLUSH_TX, 1);
-    #endif 
-    spi_write_uint8(W_TX_PAYLOAD, 0);
-    nrf24_transmitSync(value,payload_len);
-    spi_ce(HIGH);
+        spi_write_uint8(W_TX_PAYLOAD, 0);
+        nrf24_transmitSync(value,payload_len);
+        spi_ce(HIGH);
+        while(nrf24_isSending());
+        nrf24_powerUpRx();
+        radioBusy = 0;
+    }
+}
+
+void nrf24_runQueue(){
+    if(radioBusy == 0 && queue_count > 0){
+        xprintf("Running RF queue of %d elements\r\n", queue_count);
+        radioBusy = 1;
+        radio_sent = 1;   
+        nrf24_tx_address(queue_adr[queue_count]); 
+        spi_ce(LOW);
+        nrf24_powerUpTx();
+        spi_write_uint8(FLUSH_TX, 1);
+        if(queue_adr[queue_count][0] == broadCastAddress[0])
+            spi_write_uint8(W_TX_PAYLOAD_NO_ACK, 0);
+        else    
+            spi_write_uint8(W_TX_PAYLOAD, 0);
+        nrf24_transmitSync(queue[queue_count],payload_len);
+        spi_ce(HIGH);
+        while(nrf24_isSending());
+        nrf24_powerUpRx();
+        if(queue_count > 0)
+            queue_count--;
+        radioBusy = 0;
+    }
+}
+
+void nrf24_broadcast(uint8_t* value){
+    if(radioBusy == 1){
+        uint8_t count;
+        for(count = 0; count < RF_PACKET_SIZE; count++){
+            queue[queue_count][count] = value[count];
+            if(count < 5){
+               queue_adr[queue_count][count] = broadCastAddress[count]; 
+            }
+        }
+        queue_count++;
+    }else{    
+        radioBusy = 1;
+        radio_sent = 1;   
+        nrf24_tx_address(broadCastAddress); 
+        spi_ce(LOW);
+        nrf24_powerUpTx();
+        spi_write_uint8(FLUSH_TX, 1);
+        spi_write_uint8(W_TX_PAYLOAD_NO_ACK, 0);
+        nrf24_transmitSync(value,payload_len);
+        spi_ce(HIGH);
+        while(nrf24_isSending());
+        nrf24_powerUpRx();
+        radioBusy = 0;
+    }
 }
 
 uint8_t nrf24_isSending(){
@@ -153,7 +219,7 @@ uint8_t nrf24_lastMessageStatus(){
     if((rv & ((1 << MAX_RT))))
         return NRF24_MESSAGE_LOST;
     else if((rv & ((1 << TX_DS))))
-        return NRF24_TRANSMISSON_OK;
+        return NRF24_TRANSMISSION_OK;
     else
         return 0xFF;
 }
@@ -161,7 +227,6 @@ uint8_t nrf24_lastMessageStatus(){
 void nrf24_powerUpRx(){     
     spi_ce(LOW);    
     spi_write_uint8(FLUSH_RX, 1);
-    spi_write_uint8(FLUSH_TX, 1);
     nrf24_configRegister(STATUS,(1<<RX_DR)|(1<<TX_DS)|(1<<MAX_RT)); 
     nrf24_configRegister(CONFIG,nrf24_CONFIG|((1<<PWR_UP)|(1<<PRIM_RX)));    
     spi_ce(HIGH);

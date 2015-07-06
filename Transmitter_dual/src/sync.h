@@ -5,16 +5,16 @@
 #include "nrf24.h"
 
 #define TST_SIZE 4
-#define MIN_TST_ENTRIES 3
-#define MAX_AVG_DIFF 10
+#define MIN_TST_ENTRIES 4
+#define MAX_AVG_DIFF 2
 #define MAX_US 4000000000LL
-#define FAST_SYNC_COUNT 5
-#define SYNC_OFFSET 0
+#define FAST_SYNC_COUNT 6
+#define IN_SYNC_NUMBER 1
+
+#define SUPER_CYCLE_NORMAL_SEC 2
 
 #define SYNC_MODE_MASTER 0
 #define SYNC_MODE_SLAVE 1
-
-#define RF_PACKET_SIZE 14
 
 #define TIE 0x2
 #define TEN 0x1
@@ -25,11 +25,11 @@ typedef struct {
     uint32_t GT[TST_SIZE];
     uint32_t LT[TST_SIZE];
     uint32_t nLT;
-    int32_t _LT;
-    int32_t DIFF[TST_SIZE];
+    uint64_t _LT;
+    int DIFF[TST_SIZE];
     uint8_t VALID[TST_SIZE];
-    int64_t SKEW;
-    int32_t OFFSET;
+    double SKEW;
+    int OFFSET;
     uint8_t n;
 
 // Master mode:
@@ -51,6 +51,7 @@ typedef struct {
 TimeSync sync;
 
 uint8_t in_sync;
+uint32_t sync_last;
 
 volatile uint8_t receivedRF;
 

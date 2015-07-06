@@ -24,10 +24,17 @@
 #define nrf24_ADDR_LEN 5
 #define nrf24_CONFIG ((1<<EN_CRC)|(0<<CRCO))
 
-#define NRF24_TRANSMISSON_OK 0
+#define NRF24_TRANSMISSION_OK 0
 #define NRF24_MESSAGE_LOST   1
+#define MAX_QUEUE 10
+#define RF_PACKET_SIZE 14
 
 uint8_t broadCastAddress[5];
+uint8_t queue_adr[MAX_QUEUE][5];
+uint8_t queue[MAX_QUEUE][RF_PACKET_SIZE];
+uint8_t queue_count;
+uint8_t radioBusy;   
+uint8_t radio_sent;
 
 
 /* adjustment functions */
@@ -44,7 +51,9 @@ uint8_t nrf24_getStatus();
 uint8_t nrf24_rxFifoEmpty();
 
 /* core TX / RX functions */
-void    nrf24_send(uint8_t* value);
+void    nrf24_send(uint8_t* value, uint8_t* adr);
+void    nrf24_broadcast(uint8_t* value);
+void	nrf24_runQueue();
 void    nrf24_getData(uint8_t* data);
 
 /* use in dynamic length mode */
@@ -56,6 +65,7 @@ uint8_t nrf24_retransmissionCount();
 
 /* Returns the payload length */
 uint8_t nrf24_payload_length();
+
 
 /* power management */
 void    nrf24_powerUpRx();
