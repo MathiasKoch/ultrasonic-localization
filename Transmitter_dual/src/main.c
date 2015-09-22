@@ -109,6 +109,7 @@ void addAddress(uint8_t add, uint8_t type){
 //#define FREQ_SEP (1/((F2-F1)*2) * 1e6)
 
 void transmit(uint8_t add){
+    int FREQ_SEP = (1/((F2-F1)*2) * 1e6);
     uint8_t count;
     for(count = 0; count < positions.beaconCount; count++){
         if(add == positions.address[count][0]){
@@ -125,11 +126,11 @@ void transmit(uint8_t add){
             //switch_set(SWITCH_ALL, 1);
             __disable_irq()
             // 1000 us = 1 ms for half a heartbeat (To get epoch time) - TODO: Make this 1ms variable dependant on something
-            uint32_t timestamp = calculateGT((MAX_US - PIT_CVAL2) + 1000);  
+            uint32_t timestamp = calculateGT((MAX_US - PIT_CVAL2) + FREQ_SEP);  
             dac_start();
             __enable_irq();
 
-            _delay_us(2000);
+            _delay_us(FREQ_SEP*2);
 
             uint8_t data_out[RF_PACKET_SIZE];
             data_out[0] = 'e';
@@ -295,11 +296,11 @@ int main(){
     xdev_out(usb_serial_putchar);
     delay(2000);
     xprintf("\033[2J\033[1;1H");
-    xprintf("\r\n############################################\r\n");
-    xprintf("##                                        ##\r\n");
-    xprintf("##              INITIALIZING              ##\r\n");
-    xprintf("##                                        ##\r\n");
-    xprintf("############################################\r\n\r\n");
+    xprintf("\r\n############################################");
+    xprintf("\r\n##                                        ##");
+    xprintf("\r\n##              INITIALIZING              ##");
+    xprintf("\r\n##                                        ##");
+    xprintf("\r\n############################################\r\n\r\n");
 
 
     ADC_VALS adc;

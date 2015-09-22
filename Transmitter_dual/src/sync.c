@@ -219,6 +219,10 @@ void calcTimeSync(uint8_t * data){
             in_sync = 0;
         }
 
+        xprintf("%d, ", sync.GT[sync.im]-calculateGT(sync.LT[sync.im]));
+        if(sync.i%8 == 0)
+            xprintf("\r\n");
+
         //xprintf("I: %3d, Valid: %1d, GT(%10d), GTx(%10d) \t diff: %d\r\n\r\n", sync.i, sync.VALID[sync.im], sync.GT[sync.im], calculateGT(sync.LT[sync.im]), sync.GT[sync.im]-calculateGT(sync.LT[sync.im]));
         sync.LT[sync.i % TST_SIZE] = MAX_US - sync.nLT;
         if(sync.n < TST_SIZE)

@@ -119,7 +119,8 @@ void receivePosition(uint8_t * data){
 
 void startCalibrate(){
     if(mode != MODE_CALIBRATE_MASTER){
-        passCount = 0;
+        sync_init(SYNC_MODE_MASTER, DMAMUX_SOURCE_PORTD);
+        /*passCount = 0;
         calibCount = 1;
         last_request = 0;
         //firstPress = 1;    
@@ -131,7 +132,7 @@ void startCalibrate(){
         clearPositionData();
         announcePosition();
 
-        mode = MODE_CALIBRATE_MASTER;
+        mode = MODE_CALIBRATE_MASTER;*/
     }else{
         xprintf("Already calibrating dude, CHILL!\r\n");
 
